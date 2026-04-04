@@ -64,6 +64,16 @@ export async function POST(req: Request) {
   // Insert records
   const recordsWithIds = records.map((r) => ({
     ...r,
+    region: r.region ?? undefined,
+    make: r.make ?? undefined,
+    model: r.model ?? undefined,
+    year: r.year ?? undefined,
+    upstream_provider: r.upstream_provider ?? undefined,
+    interpreter_output: r.interpreter_output ?? undefined,
+    epc_output: r.epc_output ?? undefined,
+    epc_source: r.epc_source ?? undefined,
+    is_valid: r.is_valid,
+    notes: r.notes ?? undefined,
     snapshot_id: snapshot.id,
     brand_id,
   }));
