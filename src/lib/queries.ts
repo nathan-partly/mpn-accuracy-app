@@ -58,7 +58,7 @@ export async function getBrandById(id: string): Promise<Brand | null> {
     LEFT JOIN LATERAL (
       SELECT * FROM benchmark_snapshots
       WHERE brand_id = b.id
-      ORDER BY snapshot_date DESC LIMIT 1
+      ORDER BY snapshot_date DESC, created_at DESC LIMIT 1
     ) s ON true
     WHERE b.id = ${id}
   `;
@@ -75,7 +75,7 @@ export async function getSnapshotsForBrand(
     FROM benchmark_snapshots s
     JOIN brands b ON b.id = s.brand_id
     WHERE s.brand_id = ${brandId}
-    ORDER BY s.snapshot_date DESC
+    ORDER BY s.snapshot_date DESC, s.created_at DESC
   `;
   return rows as BenchmarkSnapshot[];
 }
@@ -350,7 +350,7 @@ export async function getGlobalProviderStats(): Promise<GlobalProviderStat[]> {
     JOIN LATERAL (
       SELECT id FROM benchmark_snapshots
       WHERE brand_id = b.id
-      ORDER BY snapshot_date DESC LIMIT 1
+      ORDER BY snapshot_date DESC, created_at DESC LIMIT 1
     ) latest ON true
     JOIN benchmark_records r ON r.snapshot_id = latest.id
     GROUP BY 1
@@ -375,7 +375,7 @@ export async function getGlobalStats() {
     LEFT JOIN LATERAL (
       SELECT * FROM benchmark_snapshots
       WHERE brand_id = b.id
-      ORDER BY snapshot_date DESC LIMIT 1
+      ORDER BY snapshot_date DESC, created_at DESC LIMIT 1
     ) s ON true
     WHERE s.id IS NOT NULL
   `;
