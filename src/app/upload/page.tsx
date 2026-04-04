@@ -6,9 +6,9 @@ import Papa from "papaparse";
 import type { CsvRow } from "@/types";
 import { parseIsValid } from "@/lib/utils";
 
-const REQUIRED_COLUMNS = ["vin", "part_type", "is_valid"];
+const REQUIRED_COLUMNS = ["brand", "vin", "part_type", "is_valid"];
 
-type UploadState = "idle" | "parsing" | "preview" | "uploading" | "success" | "error";
+type UploadState = "idle" | "parsing" | "preview" | "uploading" | "success";
 
 interface BrandGroup {
   brandId: string;
@@ -19,7 +19,6 @@ interface BrandGroup {
 interface UploadResult {
   brandName: string;
   brandId: string;
-  snapshotId: string;
   rowCount: number;
 }
 
@@ -29,25 +28,15 @@ export default function UploadPage() {
 
   const [state, setState] = useState<UploadState>("idle");
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
-
-  // Single-brand mode
-  const [brandId, setBrandId] = useState("");
-
-  // Multi-brand mode
-  const [isMultiBrand, setIsMultiBrand] = useState(false);
   const [brandGroups, setBrandGroups] = useState<BrandGroup[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [uploadResults, setUploadResults] = useState<UploadResult[]>([]);
-
-  const [snapshotDate, setSnapshotDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
+  const [snapshotDate, setSnapshotDate] = useState(new Date().toISOString().split("T")[0]);
   const [notes, setNotes] = useState("");
-  const [parsedRows, setParsedRows] = useState<CsvRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Load brands on mount
   useEffect(() => {
     fetch("/api/brands")
       .then((r) => r.json())
@@ -58,7 +47,6 @@ export default function UploadPage() {
     (file: File) => {
       setState("parsing");
       setParseErrors([]);
-      setIsMultiBrand(false);
       setBrandGroups([]);
 
       Papa.parse<Record<string, string>>(file, {
@@ -90,59 +78,55 @@ export default function UploadPage() {
             return;
           }
 
-          const hasBrandCol = headers.includes("brand");
+          // Group by brand
+          const grouped = new Map<string, CsvRow[]>();
+          const unknownBrands = new Set<string>();
+          const missingBrand: number[] = [];
 
-          if (hasBrandCol) {
-            // Multi-brand mode: group by brand name and validate each
-            const grouped = new Map<string, CsvRow[]>();
-            const unknownBrands = new Set<string>();
-
-            for (const row of validRows) {
-              const brandName = row.brand?.trim() ?? "";
-              if (!brandName) {
-                errors.push(`Some rows are missing a brand name — fill in the brand column for every row.`);
-                break;
-              }
-              const match = brands.find(
-                (b) => b.name.toLowerCase() === brandName.toLowerCase()
-              );
-              if (!match) {
-                unknownBrands.add(brandName);
-              } else {
-                const existing = grouped.get(match.name) ?? [];
-                existing.push(row);
-                grouped.set(match.name, existing);
-              }
-            }
-
-            if (unknownBrands.size > 0) {
-              errors.push(
-                `Unknown brand${unknownBrands.size > 1 ? "s" : ""} in CSV: ${Array.from(unknownBrands).join(", ")}. ` +
-                  `Brand names must match exactly (case-insensitive).`
-              );
-            }
-
-            if (errors.length > 0) {
-              setParseErrors(errors);
-              setState("idle");
+          validRows.forEach((row, idx) => {
+            const brandName = row.brand?.trim() ?? "";
+            if (!brandName) {
+              missingBrand.push(idx + 2); // +2 for header row + 1-indexed
               return;
             }
+            const match = brands.find(
+              (b) => b.name.toLowerCase() === brandName.toLowerCase()
+            );
+            if (!match) {
+              unknownBrands.add(brandName);
+            } else {
+              const existing = grouped.get(match.name) ?? [];
+              existing.push(row);
+              grouped.set(match.name, existing);
+            }
+          });
 
-            const groups: BrandGroup[] = Array.from(grouped.entries()).map(([name, rows]) => {
-              const brand = brands.find((b) => b.name.toLowerCase() === name.toLowerCase())!;
-              return { brandId: brand.id, brandName: brand.name, rows };
-            });
-            groups.sort((a, b) => a.brandName.localeCompare(b.brandName));
-
-            setIsMultiBrand(true);
-            setBrandGroups(groups);
-            setParsedRows(validRows);
-          } else {
-            // Single-brand mode
-            setIsMultiBrand(false);
-            setParsedRows(validRows);
+          if (missingBrand.length > 0) {
+            errors.push(
+              `${missingBrand.length} row${missingBrand.length > 1 ? "s" : ""} are missing a brand name. Fill in the brand column for every row.`
+            );
+          }
+          if (unknownBrands.size > 0) {
+            errors.push(
+              `Unknown brand${unknownBrands.size > 1 ? "s" : ""}: ${Array.from(unknownBrands).join(", ")}. Brand names must match exactly (e.g. "Ford", "BMW").`
+            );
           }
 
+          if (errors.length > 0) {
+            setParseErrors(errors);
+            setState("idle");
+            return;
+          }
+
+          const groups: BrandGroup[] = Array.from(grouped.entries())
+            .map(([name, rows]) => {
+              const brand = brands.find((b) => b.name.toLowerCase() === name.toLowerCase())!;
+              return { brandId: brand.id, brandName: brand.name, rows };
+            })
+            .sort((a, b) => a.brandName.localeCompare(b.brandName));
+
+          setBrandGroups(groups);
+          setTotalRows(validRows.length);
           setState("preview");
         },
         error: (err) => {
@@ -163,202 +147,123 @@ export default function UploadPage() {
     [handleFile]
   );
 
-  const buildRecords = (rows: CsvRow[]) =>
-    rows.map((r) => ({
-      region:             r.region?.trim() || null,
-      vin:                r.vin?.trim(),
-      make:               r.make?.trim() || null,
-      model:              r.model?.trim() || null,
-      year:               r.year ? parseInt(String(r.year)) : null,
-      upstream_provider:  r.upstream_provider?.trim() || null,
-      part_type:          r.part_type?.trim(),
-      interpreter_output: r.interpreter_output?.trim() || null,
-      epc_output:         r.epc_output?.trim() || null,
-      pl24_output:        r.pl24_output?.trim() || null,
-      epc_source:         r.epc_source?.trim() || null,
-      is_valid:           parseIsValid(r.is_valid),
-      notes:              r.notes?.trim() || null,
-    }));
-
   const handleSubmit = async () => {
     if (!snapshotDate) {
       setErrorMsg("Please set a snapshot date.");
       return;
     }
 
-    if (!isMultiBrand && !brandId) {
-      setErrorMsg("Please select a brand.");
-      return;
-    }
-
     setState("uploading");
     setErrorMsg("");
+    setUploadProgress({ done: 0, total: brandGroups.length });
 
-    if (isMultiBrand) {
-      // Submit one snapshot per brand
-      setUploadProgress({ done: 0, total: brandGroups.length });
-      const results: UploadResult[] = [];
+    const results: UploadResult[] = [];
 
-      for (let i = 0; i < brandGroups.length; i++) {
-        const group = brandGroups[i];
-        const res = await fetch("/api/snapshots", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            brand_id: group.brandId,
-            snapshot_date: snapshotDate,
-            notes,
-            records: buildRecords(group.rows),
-          }),
-        });
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          setErrorMsg(
-            `Failed to import ${group.brandName}: ${body.error ?? "unknown error"}`
-          );
-          setState("preview");
-          return;
-        }
-
-        const data = await res.json();
-        results.push({
-          brandName: group.brandName,
-          brandId: group.brandId,
-          snapshotId: data.snapshot_id,
-          rowCount: group.rows.length,
-        });
-        setUploadProgress({ done: i + 1, total: brandGroups.length });
-      }
-
-      setUploadResults(results);
-      setState("success");
-    } else {
-      // Single brand
+    for (let i = 0; i < brandGroups.length; i++) {
+      const group = brandGroups[i];
       const res = await fetch("/api/snapshots", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          brand_id: brandId,
+          brand_id: group.brandId,
           snapshot_date: snapshotDate,
           notes,
-          records: buildRecords(parsedRows),
+          records: group.rows.map((r) => ({
+            region:             r.region?.trim() || null,
+            vin:                r.vin?.trim(),
+            make:               r.make?.trim() || null,
+            model:              r.model?.trim() || null,
+            year:               r.year ? parseInt(String(r.year)) : null,
+            upstream_provider:  r.upstream_provider?.trim() || null,
+            part_type:          r.part_type?.trim(),
+            interpreter_output: r.interpreter_output?.trim() || null,
+            epc_output:         r.epc_output?.trim() || null,
+            pl24_output:        r.pl24_output?.trim() || null,
+            epc_source:         r.epc_source?.trim() || null,
+            is_valid:           parseIsValid(r.is_valid),
+            notes:              r.notes?.trim() || null,
+          })),
         }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setErrorMsg(body.error ?? "Upload failed. Please try again.");
+        setErrorMsg(`Failed to import ${group.brandName}: ${body.error ?? "unknown error"}`);
         setState("preview");
         return;
       }
 
-      setState("success");
+      results.push({ brandName: group.brandName, brandId: group.brandId, rowCount: group.rows.length });
+      setUploadProgress({ done: i + 1, total: brandGroups.length });
     }
-  };
 
-  // Summary stats
-  const validCount   = parsedRows.filter((r) => parseIsValid(r.is_valid) === true).length;
-  const invalidCount = parsedRows.filter((r) => parseIsValid(r.is_valid) === false).length;
-  const vinCount     = new Set(parsedRows.map((r) => r.vin)).size;
+    setUploadResults(results);
+    setState("success");
+  };
 
   const resetForm = () => {
     setState("idle");
-    setParsedRows([]);
-    setBrandId("");
-    setNotes("");
-    setIsMultiBrand(false);
     setBrandGroups([]);
     setUploadResults([]);
     setUploadProgress(null);
+    setNotes("");
+    setTotalRows(0);
     if (fileRef.current) fileRef.current.value = "";
   };
 
   // ── Success screen ───────────────────────────────────────────────────────────
   if (state === "success") {
-    if (isMultiBrand && uploadResults.length > 0) {
-      return (
-        <div className="max-w-2xl mx-auto px-6 py-16">
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-grey-950 mb-1">
-              {uploadResults.length} snapshot{uploadResults.length !== 1 ? "s" : ""} imported
-            </h2>
-            <p className="text-grey-400 text-sm">
-              {parsedRows.length.toLocaleString()} total records · {snapshotDate}
-            </p>
-          </div>
-
-          <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
-            <div className="h-1 bg-brand-blue" />
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-grey-100">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-grey-400 uppercase tracking-widest">Rows</th>
-                  <th className="px-4 py-2.5" />
-                </tr>
-              </thead>
-              <tbody>
-                {uploadResults.map((r, i) => (
-                  <tr key={r.brandId} className={i !== uploadResults.length - 1 ? "border-b border-grey-100" : ""}>
-                    <td className="px-4 py-2.5 font-medium text-grey-950">{r.brandName}</td>
-                    <td className="px-4 py-2.5 text-right text-grey-500">{r.rowCount.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <button
-                        onClick={() => router.push(`/brands/${r.brandId}`)}
-                        className="text-xs font-semibold text-brand-blue hover:underline"
-                      >
-                        View →
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex justify-center">
-            <button
-              onClick={resetForm}
-              className="px-4 py-2 text-sm text-grey-400 border border-grey-100 rounded-lg hover:bg-grey-50 transition-colors"
-            >
-              Upload another file
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // Single-brand success
-    const brand = brands.find((b) => b.id === brandId);
     return (
-      <div className="max-w-2xl mx-auto px-6 py-16 text-center">
-        <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
+      <div className="max-w-2xl mx-auto px-6 py-16">
+        <div className="text-center mb-8">
+          <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-grey-950 mb-1">
+            {uploadResults.length} snapshot{uploadResults.length !== 1 ? "s" : ""} created
+          </h2>
+          <p className="text-grey-400 text-sm">
+            {totalRows.toLocaleString()} total rows · {snapshotDate}
+          </p>
         </div>
-        <h2 className="text-xl font-bold text-grey-950 mb-2">Snapshot imported</h2>
-        <p className="text-grey-400 text-sm mb-6">
-          {parsedRows.length.toLocaleString()} records imported for {brand?.name} · {snapshotDate}
-        </p>
-        <div className="flex gap-3 justify-center">
+
+        <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
+          <div className="h-1 bg-brand-blue" />
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-grey-100">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-grey-400 uppercase tracking-widest">Rows</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {uploadResults.map((r, i) => (
+                <tr key={r.brandId} className={i !== uploadResults.length - 1 ? "border-b border-grey-100" : ""}>
+                  <td className="px-4 py-2.5 font-medium text-grey-950">{r.brandName}</td>
+                  <td className="px-4 py-2.5 text-right text-grey-500">{r.rowCount.toLocaleString()}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => router.push(`/brands/${r.brandId}`)}
+                      className="text-xs font-semibold text-brand-blue hover:underline"
+                    >
+                      View →
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex justify-center">
           <button
             onClick={resetForm}
             className="px-4 py-2 text-sm text-grey-400 border border-grey-100 rounded-lg hover:bg-grey-50 transition-colors"
           >
-            Upload another
-          </button>
-          <button
-            onClick={() => router.push(`/brands/${brandId}`)}
-            className="px-4 py-2 text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            View {brand?.name} →
+            Upload another file
           </button>
         </div>
       </div>
@@ -374,11 +279,11 @@ export default function UploadPage() {
         </p>
         <h1 className="text-2xl font-bold text-grey-950">Import Benchmark Results</h1>
         <p className="text-grey-400 text-sm mt-1">
-          Upload a CSV to create new snapshots. Include a <code className="bg-grey-100 px-1 rounded">brand</code> column to import multiple brands in one file.
+          Re-upload your master CSV whenever you add or edit rows. Each upload creates a new dated snapshot for every brand in the file.
         </p>
       </div>
 
-      {/* Step 1: Metadata */}
+      {/* Step 1: Snapshot metadata */}
       <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-5">
         <div className="h-1 bg-brand-blue" />
         <div className="p-6">
@@ -386,28 +291,7 @@ export default function UploadPage() {
             Step 1 — Snapshot details
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Brand selector — hidden in multi-brand mode */}
-            {!isMultiBrand && (
-              <div>
-                <label className="block text-xs font-semibold text-grey-950 mb-1.5">
-                  Brand <span className="text-red-500">*</span>
-                  <span className="text-grey-400 font-normal ml-1">(not needed if CSV has a brand column)</span>
-                </label>
-                <select
-                  value={brandId}
-                  onChange={(e) => setBrandId(e.target.value)}
-                  className="w-full border border-grey-100 rounded-lg px-3 py-2 text-sm text-grey-950 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
-                >
-                  <option value="">Select brand…</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className={isMultiBrand ? "sm:col-span-1" : ""}>
+            <div>
               <label className="block text-xs font-semibold text-grey-950 mb-1.5">
                 Snapshot Date <span className="text-red-500">*</span>
               </label>
@@ -418,15 +302,15 @@ export default function UploadPage() {
                 className="w-full border border-grey-100 rounded-lg px-3 py-2 text-sm text-grey-950 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <label className="block text-xs font-semibold text-grey-950 mb-1.5">
-                Notes <span className="text-grey-400 font-normal">(optional — applied to all snapshots)</span>
+                Notes <span className="text-grey-400 font-normal">(optional)</span>
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. Post ADP data source block, re-run after filter update"
+                placeholder="e.g. Added PL24 results for EU fleet"
                 className="w-full border border-grey-100 rounded-lg px-3 py-2 text-sm text-grey-950 placeholder:text-grey-400 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent"
               />
             </div>
@@ -457,7 +341,7 @@ export default function UploadPage() {
               {state === "parsing" ? "Parsing…" : "Drop CSV here or click to browse"}
             </p>
             <p className="text-xs text-grey-400 mt-1">
-              Required: vin, part_type, is_valid · Download the template below for the full format
+              Must include a <code className="bg-white border border-grey-100 px-1 rounded">brand</code> column — download the template below for the full format
             </p>
           </div>
           <input
@@ -479,19 +363,19 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Expected format + template download */}
+          {/* Format reference + template download */}
           <div className="mt-4 p-3 bg-grey-50 rounded-lg">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-2">
-                  Expected CSV format
+                  CSV column format
                 </p>
                 <code className="text-xs text-grey-900 font-mono break-all">
                   brand, region, vin, make, model, year, upstream_provider, part_type, interpreter_output, epc_output, pl24_output, epc_source, is_valid, notes
                 </code>
                 <div className="mt-2 space-y-1">
                   <p className="text-xs text-grey-400">
-                    <strong className="text-grey-900">brand</strong> — include to import multiple brands at once; omit to use the brand selector above
+                    <strong className="text-grey-900">brand</strong> — required; must match an existing brand name exactly (e.g. &quot;Ford&quot;, &quot;BMW&quot;)
                   </p>
                   <p className="text-xs text-grey-400">
                     <strong className="text-grey-900">is_valid</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">true</code> match · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">false</code> no-match · <em>blank</em> = skip
@@ -501,9 +385,6 @@ export default function UploadPage() {
                   </p>
                   <p className="text-xs text-grey-400">
                     <strong className="text-grey-900">pl24_output</strong> — the MPN returned by PL24 (leave blank if not used)
-                  </p>
-                  <p className="text-xs text-grey-400">
-                    Only <strong className="text-grey-900">vin</strong>, <strong className="text-grey-900">part_type</strong> and <strong className="text-grey-900">is_valid</strong> are required. All other columns are optional.
                   </p>
                 </div>
               </div>
@@ -549,13 +430,12 @@ export default function UploadPage() {
               Step 3 — Preview & confirm
             </p>
 
-            {/* Stats row */}
-            <div className="grid grid-cols-4 gap-3 mb-5">
+            {/* Summary stats */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
               {[
-                { label: "Rows", value: parsedRows.length.toLocaleString() },
-                { label: "VINs", value: vinCount.toLocaleString() },
-                { label: "Valid", value: validCount.toLocaleString() },
-                { label: "Invalid", value: invalidCount.toLocaleString() },
+                { label: "Total Rows", value: totalRows.toLocaleString() },
+                { label: "Brands", value: brandGroups.length.toLocaleString() },
+                { label: "VINs", value: new Set(brandGroups.flatMap((g) => g.rows.map((r) => r.vin))).size.toLocaleString() },
               ].map((s) => (
                 <div key={s.label} className="bg-grey-50 rounded-lg p-3 text-center">
                   <p className="text-lg font-bold text-grey-950">{s.value}</p>
@@ -564,99 +444,51 @@ export default function UploadPage() {
               ))}
             </div>
 
-            {/* Multi-brand breakdown */}
-            {isMultiBrand && (
-              <div className="mb-5">
-                <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-2">
-                  Brands detected — {brandGroups.length} snapshot{brandGroups.length !== 1 ? "s" : ""} will be created
-                </p>
-                <div className="border border-grey-100 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-grey-50">
-                      <tr>
-                        <th className="text-left px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">Rows</th>
-                        <th className="text-right px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">VINs</th>
-                        {state === "uploading" && uploadProgress && (
-                          <th className="text-right px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">Status</th>
+            {/* Per-brand breakdown */}
+            <div className="border border-grey-100 rounded-lg overflow-hidden mb-5">
+              <table className="w-full text-sm">
+                <thead className="bg-grey-50">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">Rows</th>
+                    <th className="text-right px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">VINs</th>
+                    {state === "uploading" && (
+                      <th className="text-right px-3 py-2 text-xs font-semibold text-grey-400 uppercase tracking-widest">Status</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {brandGroups.map((g, i) => {
+                    const done = uploadProgress?.done ?? 0;
+                    const isComplete = state === "uploading" && i < done;
+                    const isActive = state === "uploading" && i === done;
+                    return (
+                      <tr key={g.brandId} className="border-t border-grey-100">
+                        <td className="px-3 py-2 font-medium text-grey-950">{g.brandName}</td>
+                        <td className="px-3 py-2 text-right text-grey-500">{g.rows.length.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-grey-500">
+                          {new Set(g.rows.map((r) => r.vin)).size.toLocaleString()}
+                        </td>
+                        {state === "uploading" && (
+                          <td className="px-3 py-2 text-right">
+                            {isComplete ? (
+                              <span className="text-emerald-600 font-semibold text-xs">✓ Done</span>
+                            ) : isActive ? (
+                              <span className="text-brand-blue text-xs">Importing…</span>
+                            ) : (
+                              <span className="text-grey-300 text-xs">Waiting</span>
+                            )}
+                          </td>
                         )}
                       </tr>
-                    </thead>
-                    <tbody>
-                      {brandGroups.map((g, i) => {
-                        const done = uploadProgress ? uploadProgress.done : 0;
-                        const isComplete = state === "uploading" && i < done;
-                        const isActive = state === "uploading" && i === done;
-                        return (
-                          <tr key={g.brandId} className={i !== brandGroups.length - 1 ? "border-t border-grey-100" : "border-t border-grey-100"}>
-                            <td className="px-3 py-2 font-medium text-grey-950">{g.brandName}</td>
-                            <td className="px-3 py-2 text-right text-grey-500">{g.rows.length.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-right text-grey-500">
-                              {new Set(g.rows.map((r) => r.vin)).size.toLocaleString()}
-                            </td>
-                            {state === "uploading" && uploadProgress && (
-                              <td className="px-3 py-2 text-right">
-                                {isComplete ? (
-                                  <span className="text-emerald-600 font-semibold text-xs">✓ Done</span>
-                                ) : isActive ? (
-                                  <span className="text-brand-blue text-xs">Importing…</span>
-                                ) : (
-                                  <span className="text-grey-300 text-xs">Waiting</span>
-                                )}
-                              </td>
-                            )}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Sample rows (single-brand mode) */}
-            {!isMultiBrand && (
-              <div className="overflow-x-auto border border-grey-100 rounded-lg mb-5">
-                <table className="w-full text-xs">
-                  <thead className="bg-grey-50">
-                    <tr>
-                      {["VIN", "Model", "Year", "Part Type", "is_valid"].map((h) => (
-                        <th key={h} className="text-left px-3 py-2 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parsedRows.slice(0, 5).map((r, i) => (
-                      <tr key={i} className="border-t border-grey-100">
-                        <td className="px-3 py-2 font-mono text-grey-400">{r.vin}</td>
-                        <td className="px-3 py-2 text-grey-900">{r.model ?? "—"}</td>
-                        <td className="px-3 py-2 text-grey-900">{r.year ?? "—"}</td>
-                        <td className="px-3 py-2 text-grey-900">{r.part_type}</td>
-                        <td className="px-3 py-2">
-                          {parseIsValid(r.is_valid) === true ? (
-                            <span className="text-emerald-700 font-semibold">valid</span>
-                          ) : parseIsValid(r.is_valid) === false ? (
-                            <span className="text-red-600 font-semibold">invalid</span>
-                          ) : (
-                            <span className="text-grey-400">skipped</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {parsedRows.length > 5 && (
-                  <p className="px-3 py-2 text-xs text-grey-400 border-t border-grey-100">
-                    …and {(parsedRows.length - 5).toLocaleString()} more rows
-                  </p>
-                )}
-              </div>
-            )}
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
             {errorMsg && (
-              <p className="mt-3 text-sm text-red-600">{errorMsg}</p>
+              <p className="mb-4 text-sm text-red-600">{errorMsg}</p>
             )}
 
             <div className="flex gap-3">
@@ -673,12 +505,8 @@ export default function UploadPage() {
                 className="px-5 py-2 text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {state === "uploading"
-                  ? isMultiBrand
-                    ? `Importing ${uploadProgress?.done ?? 0} of ${uploadProgress?.total ?? brandGroups.length}…`
-                    : "Importing…"
-                  : isMultiBrand
-                  ? `Confirm import (${brandGroups.length} brands · ${parsedRows.length.toLocaleString()} rows)`
-                  : `Confirm import (${parsedRows.length.toLocaleString()} rows)`}
+                  ? `Importing ${uploadProgress?.done ?? 0} of ${uploadProgress?.total ?? brandGroups.length}…`
+                  : `Confirm import (${brandGroups.length} brand${brandGroups.length !== 1 ? "s" : ""} · ${totalRows.toLocaleString()} rows)`}
               </button>
             </div>
           </div>

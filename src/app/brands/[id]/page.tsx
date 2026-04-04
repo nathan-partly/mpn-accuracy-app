@@ -81,7 +81,7 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
           href="/upload"
           className="inline-block bg-brand-blue text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
         >
-          + Upload new snapshot
+          Re-upload master CSV
         </Link>
       </div>
 

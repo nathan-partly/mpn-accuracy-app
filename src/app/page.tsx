@@ -29,7 +29,7 @@ export default async function DashboardPage() {
           Interpreter Accuracy Benchmarking
         </h1>
         <p className="text-grey-400 text-sm mt-1">
-          MPN accuracy validation across all benchmarked brands
+          MPN accuracy validation across all benchmarked brands · re-upload your master CSV to add a new snapshot
         </p>
       </div>
 
@@ -138,7 +138,7 @@ export default async function DashboardPage() {
                         href="/upload"
                         className="text-xs text-brand-blue font-semibold hover:underline"
                       >
-                        Upload results →
+                        Upload master CSV →
                       </Link>
                     </td>
                   </tr>
