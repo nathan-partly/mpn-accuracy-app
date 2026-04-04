@@ -8,7 +8,6 @@ import type {
   PartTypeBreakdown,
   ProviderBreakdown,
   RegionBreakdown,
-  EpcSourceBreakdown,
   GlobalProviderStat,
 } from "@/types";
 
@@ -316,26 +315,6 @@ export async function getRegionBreakdown(
     ORDER BY vin_count DESC
   `;
   return rows as RegionBreakdown[];
-}
-
-export async function getEpcSourceBreakdown(
-  snapshotId: string
-): Promise<EpcSourceBreakdown[]> {
-  const rows = await sql`
-    SELECT
-      COALESCE(epc_source, 'Unknown') AS epc_source,
-      COUNT(*)                        AS part_count,
-      ROUND(
-        COUNT(*)::numeric
-        / NULLIF(SUM(COUNT(*)) OVER (), 0) * 100, 1
-      )                               AS pct
-    FROM benchmark_records
-    WHERE snapshot_id = ${snapshotId}
-      AND is_valid IS NOT NULL
-    GROUP BY epc_source
-    ORDER BY part_count DESC
-  `;
-  return rows as EpcSourceBreakdown[];
 }
 
 export async function getGlobalProviderStats(): Promise<GlobalProviderStat[]> {

@@ -88,12 +88,6 @@ export interface RegionBreakdown {
   pct: number;
 }
 
-export interface EpcSourceBreakdown {
-  epc_source: string;
-  part_count: number;
-  pct: number;
-}
-
 export interface GlobalProviderStat {
   provider: string;
   total_parts: number;
@@ -114,7 +108,6 @@ export interface CsvRow {
   interpreter_output?: string;
   epc_output?: string;
   pl24_output?: string;
-  epc_source?: string;
   is_valid: string | boolean;
   notes?: string;
 }

@@ -8,7 +8,6 @@ import {
   getPartTypeBreakdown,
   getProviderBreakdown,
   getRegionBreakdown,
-  getEpcSourceBreakdown,
   getRecordsForSnapshot,
 } from "@/lib/queries";
 import { KpiCard } from "@/components/KpiCard";
@@ -55,12 +54,11 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
   const activeSnapshot =
     snapshots.find((s) => s.id === activeSnapshotId) ?? snapshots[0];
 
-  const [modelBreakdown, partTypeBreakdown, providerBreakdown, regionBreakdown, epcSourceBreakdown, records] = await Promise.all([
+  const [modelBreakdown, partTypeBreakdown, providerBreakdown, regionBreakdown, records] = await Promise.all([
     getModelBreakdown(activeSnapshot.id),
     getPartTypeBreakdown(activeSnapshot.id),
     getProviderBreakdown(activeSnapshot.id),
     getRegionBreakdown(activeSnapshot.id),
-    getEpcSourceBreakdown(activeSnapshot.id),
     getRecordsForSnapshot(activeSnapshot.id),
   ]);
 
@@ -167,9 +165,9 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      {/* Provider + Region + EPC source split */}
-      {(providerBreakdown.length > 0 || regionBreakdown.length > 0 || epcSourceBreakdown.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      {/* Provider + Region split */}
+      {(providerBreakdown.length > 0 || regionBreakdown.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           {providerBreakdown.length > 0 && (
             <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
               <div className="h-1 bg-brand-blue" />
@@ -213,37 +211,6 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
                       </div>
                       <div className="w-full bg-grey-100 rounded-full h-2">
                         <div className="bg-brand-blue h-2 rounded-full" style={{ width: `${Number(r.pct)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-          {epcSourceBreakdown.length > 0 && (
-            <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
-              <div className="h-1 bg-brand-blue" />
-              <div className="p-5">
-                <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">
-                  EPC Validation Source
-                </p>
-                <p className="text-xs text-grey-400 mb-4">
-                  Of validated parts only
-                </p>
-                <div className="space-y-3">
-                  {epcSourceBreakdown.map((e) => (
-                    <div key={e.epc_source}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-grey-950">{e.epc_source}</span>
-                        <span className="text-sm text-grey-400">
-                          {Number(e.part_count).toLocaleString()} parts · {Number(e.pct).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-grey-100 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full ${e.epc_source === "Non-Original EPC" ? "bg-amber-400" : "bg-brand-blue"}`}
-                          style={{ width: `${Number(e.pct)}%` }}
-                        />
                       </div>
                     </div>
                   ))}

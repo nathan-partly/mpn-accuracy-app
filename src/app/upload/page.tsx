@@ -179,7 +179,6 @@ export default function UploadPage() {
             interpreter_output: r.interpreter_output?.trim() || null,
             epc_output:         r.epc_output?.trim() || null,
             pl24_output:        r.pl24_output?.trim() || null,
-            epc_source:         r.epc_source?.trim() || null,
             is_valid:           parseIsValid(r.is_valid),
             notes:              r.notes?.trim() || null,
           })),
@@ -371,7 +370,7 @@ export default function UploadPage() {
                   CSV column format
                 </p>
                 <code className="text-xs text-grey-900 font-mono break-all">
-                  brand, region, vin, make, model, year, upstream_provider, part_type, interpreter_output, epc_output, pl24_output, epc_source, is_valid, notes
+                  brand, region, vin, make, model, year, upstream_provider, part_type, interpreter_output, epc_output, pl24_output, is_valid, notes
                 </code>
                 <div className="mt-2 space-y-1">
                   <p className="text-xs text-grey-400">
@@ -379,9 +378,6 @@ export default function UploadPage() {
                   </p>
                   <p className="text-xs text-grey-400">
                     <strong className="text-grey-900">is_valid</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">true</code> match · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">false</code> no-match · <em>blank</em> = skip
-                  </p>
-                  <p className="text-xs text-grey-400">
-                    <strong className="text-grey-900">epc_source</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Original EPC</code> · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">PL24</code> · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Both</code> · or blank
                   </p>
                   <p className="text-xs text-grey-400">
                     <strong className="text-grey-900">pl24_output</strong> — the MPN returned by PL24 (leave blank if not used)
@@ -392,13 +388,13 @@ export default function UploadPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   const rows = [
-                    ["brand", "region", "vin", "make", "model", "year", "upstream_provider", "part_type", "interpreter_output", "epc_output", "pl24_output", "epc_source", "is_valid", "notes"],
-                    ["Toyota", "EU", "VIN1AB23CD45EF01", "Toyota", "RAV4", "2023", "YQService", "Front Bumper Cover", "521194A922", "521194A922", "", "Original EPC", "true", ""],
-                    ["Toyota", "EU", "VIN2GH67IJ89KL02", "Toyota", "RAV4", "2023", "ADP", "Radiator", "164000A040", "", "164000A040", "PL24", "true", ""],
-                    ["Toyota", "EU", "VIN3MN01OP23QR03", "Toyota", "RAV4", "2023", "YQService", "Cabin Air Filter", "1780A003", "1780A003", "1780A003", "Both", "true", ""],
-                    ["Ford", "EU", "VIN4ST45UV67WX04", "Ford", "Focus", "2022", "YQService", "Left Headlamp Assembly", "8118542E10", "8118542E11", "", "Original EPC", "false", ""],
-                    ["Ford", "EU", "VIN5AB12CD34EF05", "Ford", "Focus", "2021", "YQService", "Roof Rack", "Missing Diagram", "", "", "", "", "No diagram in EPC"],
-                    ["Ford", "US", "VIN6YZ89AB12CD06", "Ford", "Mustang", "2020", "ADP", "Oil Filter", "VIN not found", "", "", "", "", "VIN absent from EPC"],
+                    ["brand", "region", "vin", "make", "model", "year", "upstream_provider", "part_type", "interpreter_output", "epc_output", "pl24_output", "is_valid", "notes"],
+                    ["Toyota", "EU", "VIN1AB23CD45EF01", "Toyota", "RAV4", "2023", "YQService", "Front Bumper Cover", "521194A922", "521194A922", "", "true", ""],
+                    ["Toyota", "EU", "VIN2GH67IJ89KL02", "Toyota", "RAV4", "2023", "ADP", "Radiator", "164000A040", "", "164000A040", "true", ""],
+                    ["Toyota", "EU", "VIN3MN01OP23QR03", "Toyota", "RAV4", "2023", "YQService", "Cabin Air Filter", "1780A003", "1780A003", "1780A003", "true", ""],
+                    ["Ford", "EU", "VIN4ST45UV67WX04", "Ford", "Focus", "2022", "YQService", "Left Headlamp Assembly", "8118542E10", "8118542E11", "", "false", ""],
+                    ["Ford", "EU", "VIN5AB12CD34EF05", "Ford", "Focus", "2021", "YQService", "Roof Rack", "Missing Diagram", "", "", "", "No diagram in EPC"],
+                    ["Ford", "US", "VIN6YZ89AB12CD06", "Ford", "Mustang", "2020", "ADP", "Oil Filter", "VIN not found", "", "", "", "VIN absent from EPC"],
                   ];
                   const csv = rows.map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");
                   const blob = new Blob([csv], { type: "text/csv" });
