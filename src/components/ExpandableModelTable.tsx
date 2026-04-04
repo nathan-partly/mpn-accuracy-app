@@ -34,13 +34,14 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
     );
   }
 
-  // Group records by VIN so each VIN gets a sub-header
+  // Group records by VIN + upstream_provider so each VIN/provider combo gets its own sub-section
   function groupByVin(recs: BenchmarkRecord[]): Map<string, BenchmarkRecord[]> {
     const map = new Map<string, BenchmarkRecord[]>();
     for (const r of recs) {
-      const existing = map.get(r.vin) ?? [];
+      const key = `${r.vin}||${r.upstream_provider ?? ""}`;
+      const existing = map.get(key) ?? [];
       existing.push(r);
-      map.set(r.vin, existing);
+      map.set(key, existing);
     }
     return map;
   }
