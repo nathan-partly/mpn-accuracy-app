@@ -96,6 +96,23 @@ export interface GlobalProviderStat {
   accuracy_pct: number;
 }
 
+export interface SnapshotDiff {
+  new_vin_count: number;
+  removed_vin_count: number;
+  improved_count: number;   // records that went from non-valid → valid
+  regressed_count: number;  // records that went from valid → non-valid
+}
+
+export interface ProviderAccuracyStat {
+  upstream_provider: string;
+  vin_count: number;
+  total_parts: number;
+  valid_count: number;
+  invalid_count: number;
+  accuracy_pct: number;
+  pct: number; // share of total VINs
+}
+
 export interface CsvRow {
   brand?: string;
   region?: string;

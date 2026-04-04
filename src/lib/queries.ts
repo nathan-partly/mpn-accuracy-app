@@ -9,6 +9,8 @@ import type {
   ProviderBreakdown,
   RegionBreakdown,
   GlobalProviderStat,
+  SnapshotDiff,
+  ProviderAccuracyStat,
 } from "@/types";
 
 // ─── Brands ───────────────────────────────────────────────────────────────────
@@ -357,6 +359,100 @@ export async function getGlobalProviderStats(): Promise<GlobalProviderStat[]> {
     ORDER BY total_parts DESC
   `;
   return rows as GlobalProviderStat[];
+}
+
+// ─── Snapshot diff ────────────────────────────────────────────────────────────
+
+export async function getSnapshotDiff(
+  currentId: string,
+  prevId: string
+): Promise<SnapshotDiff> {
+  const rows = await sql`
+    WITH
+    prev_records AS (
+      SELECT vin, part_type, is_valid
+      FROM benchmark_records
+      WHERE snapshot_id = ${prevId}
+    ),
+    curr_records AS (
+      SELECT vin, part_type, is_valid
+      FROM benchmark_records
+      WHERE snapshot_id = ${currentId}
+    ),
+    new_vins AS (
+      SELECT COUNT(DISTINCT vin)::int AS cnt
+      FROM curr_records c
+      WHERE NOT EXISTS (SELECT 1 FROM prev_records p WHERE p.vin = c.vin)
+    ),
+    removed_vins AS (
+      SELECT COUNT(DISTINCT vin)::int AS cnt
+      FROM prev_records p
+      WHERE NOT EXISTS (SELECT 1 FROM curr_records c WHERE c.vin = p.vin)
+    ),
+    changes AS (
+      SELECT
+        COUNT(*) FILTER (
+          WHERE c.is_valid = true AND (p.is_valid = false OR p.is_valid IS NULL)
+        )::int AS improved,
+        COUNT(*) FILTER (
+          WHERE (c.is_valid = false OR c.is_valid IS NULL) AND p.is_valid = true
+        )::int AS regressed
+      FROM curr_records c
+      JOIN prev_records p ON p.vin = c.vin AND p.part_type = c.part_type
+    )
+    SELECT
+      (SELECT cnt FROM new_vins)      AS new_vin_count,
+      (SELECT cnt FROM removed_vins)  AS removed_vin_count,
+      (SELECT improved  FROM changes) AS improved_count,
+      (SELECT regressed FROM changes) AS regressed_count
+  `;
+  return rows[0] as SnapshotDiff;
+}
+
+// ─── Provider accuracy breakdown ──────────────────────────────────────────────
+
+export async function getProviderAccuracyBreakdown(
+  snapshotId: string
+): Promise<ProviderAccuracyStat[]> {
+  const rows = await sql`
+    SELECT
+      CASE
+        WHEN LOWER(TRIM(upstream_provider)) IN ('yqservice', 'yqservices')
+          OR upstream_provider ILIKE 'yq%service%'             THEN 'YQService'
+        WHEN LOWER(TRIM(upstream_provider)) = 'adp'            THEN 'ADP'
+        WHEN upstream_provider ILIKE '%parts%bond%'
+          OR LOWER(TRIM(upstream_provider)) = 'partsbond'      THEN 'Parts Bond'
+        WHEN upstream_provider ILIKE '%mazda%'
+          AND upstream_provider ILIKE '%offline%'              THEN 'Mazda EU Offline'
+        WHEN upstream_provider ILIKE '%holden%'
+          AND upstream_provider ILIKE '%offline%'              THEN 'Holden Offline'
+        WHEN upstream_provider ILIKE '%honda%'
+          AND upstream_provider ILIKE '%offline%'              THEN 'Honda Offline'
+        WHEN upstream_provider ILIKE '%tradesoft%'
+          OR upstream_provider ILIKE '%trade%soft%'            THEN 'TradeSoft'
+        ELSE 'No upstream provider'
+      END                                                           AS upstream_provider,
+      COUNT(DISTINCT vin)                                           AS vin_count,
+      COUNT(*) FILTER (WHERE is_valid IS NOT NULL)                  AS total_parts,
+      COUNT(*) FILTER (WHERE is_valid = true)                       AS valid_count,
+      COUNT(*) FILTER (WHERE is_valid = false)                      AS invalid_count,
+      CASE
+        WHEN COUNT(*) FILTER (WHERE is_valid IS NOT NULL) = 0 THEN 0
+        ELSE ROUND(
+          COUNT(*) FILTER (WHERE is_valid = true)::numeric
+          / COUNT(*) FILTER (WHERE is_valid IS NOT NULL) * 100, 2
+        )
+      END                                                           AS accuracy_pct,
+      ROUND(
+        COUNT(DISTINCT vin)::numeric
+        / NULLIF(SUM(COUNT(DISTINCT vin)) OVER (), 0) * 100, 1
+      )                                                             AS pct
+    FROM benchmark_records
+    WHERE snapshot_id = ${snapshotId}
+    GROUP BY 1
+    ORDER BY vin_count DESC
+  `;
+  return rows as ProviderAccuracyStat[];
 }
 
 export async function getGlobalStats() {

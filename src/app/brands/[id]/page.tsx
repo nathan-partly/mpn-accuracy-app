@@ -6,15 +6,17 @@ import {
   getAccuracyHistory,
   getModelBreakdown,
   getPartTypeBreakdown,
-  getProviderBreakdown,
+  getProviderAccuracyBreakdown,
   getRegionBreakdown,
   getRecordsForSnapshot,
+  getSnapshotDiff,
 } from "@/lib/queries";
 import { KpiCard } from "@/components/KpiCard";
 import { AccuracyBadge } from "@/components/AccuracyBadge";
 import { AccuracyChart } from "@/components/AccuracyChart";
 import { ExpandableModelTable } from "@/components/ExpandableModelTable";
 import { DeleteSnapshotButton } from "@/components/DeleteSnapshotButton";
+import { SnapshotDiffPanel } from "@/components/SnapshotDiffPanel";
 import { formatDate, formatPct, accuracyPct } from "@/lib/utils";
 
 export const revalidate = 60;
@@ -55,13 +57,26 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
   const activeSnapshot =
     snapshots.find((s) => s.id === activeSnapshotId) ?? snapshots[0];
 
-  const [modelBreakdown, partTypeBreakdown, providerBreakdown, regionBreakdown, records] = await Promise.all([
+  // Previous snapshot (chronologically earlier than active)
+  const activeSnapshotIdx = snapshots.findIndex((s) => s.id === activeSnapshot.id);
+  const prevSnapshot = activeSnapshotIdx < snapshots.length - 1
+    ? snapshots[activeSnapshotIdx + 1]
+    : null;
+
+  const [modelBreakdown, partTypeBreakdown, prevPartTypeBreakdown, providerAccuracyBreakdown, regionBreakdown, records, snapshotDiff] = await Promise.all([
     getModelBreakdown(activeSnapshot.id),
     getPartTypeBreakdown(activeSnapshot.id),
-    getProviderBreakdown(activeSnapshot.id),
+    prevSnapshot ? getPartTypeBreakdown(prevSnapshot.id) : Promise.resolve([]),
+    getProviderAccuracyBreakdown(activeSnapshot.id),
     getRegionBreakdown(activeSnapshot.id),
     getRecordsForSnapshot(activeSnapshot.id),
+    prevSnapshot ? getSnapshotDiff(activeSnapshot.id, prevSnapshot.id) : Promise.resolve(null),
   ]);
+
+  // Build a lookup map for HCA accuracy delta vs previous snapshot
+  const prevHcaMap = new Map(
+    prevPartTypeBreakdown.map((r) => [r.part_type, Number(r.accuracy_pct)])
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -129,8 +144,7 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
               Snapshots
             </p>
             <div className="space-y-2">
-              {snapshots.map((s) => (
-                <div key={s.id} className="relative group">
+              {snapshots.map((s) => (                <div key={s.id} className="relative group">
                   <Link
                     href={`/brands/${brand.id}?snapshot=${s.id}`}
                     className={`block rounded-lg border px-3 py-2.5 transition-colors text-sm ${
@@ -171,35 +185,53 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
                 </div>
               ))}
             </div>
+
+            {/* Diff vs previous snapshot */}
+            {snapshotDiff && prevSnapshot && (
+              <SnapshotDiffPanel
+                diff={snapshotDiff}
+                currentSnapshot={activeSnapshot}
+                prevSnapshot={prevSnapshot}
+              />
+            )}
           </div>
         </div>
       </div>
 
       {/* Provider + Region split */}
-      {(providerBreakdown.length > 0 || regionBreakdown.length > 0) && (
+      {(providerAccuracyBreakdown.length > 0 || regionBreakdown.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {providerBreakdown.length > 0 && (
+          {providerAccuracyBreakdown.length > 0 && (
             <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
               <div className="h-1 bg-brand-blue" />
               <div className="p-5">
                 <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-4">
-                  Data Provider Split
+                  Provider Accuracy
                 </p>
-                <div className="space-y-3">
-                  {providerBreakdown.map((p) => (
-                    <div key={p.upstream_provider}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-grey-950">{p.upstream_provider}</span>
-                        <span className="text-sm text-grey-400">
-                          {p.vin_count} VIN{p.vin_count !== 1 ? "s" : ""} · {Number(p.pct).toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full bg-grey-100 rounded-full h-2">
-                        <div className="bg-brand-blue h-2 rounded-full" style={{ width: `${Number(p.pct)}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-grey-100">
+                      <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Provider</th>
+                      <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">VINs</th>
+                      <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Valid</th>
+                      <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Invalid</th>
+                      <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Accuracy</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {providerAccuracyBreakdown.map((p, i) => (
+                      <tr key={p.upstream_provider} className={i !== providerAccuracyBreakdown.length - 1 ? "border-b border-grey-100" : ""}>
+                        <td className="py-2.5 font-medium text-grey-950">{p.upstream_provider}</td>
+                        <td className="py-2.5 text-right text-grey-500">{Number(p.vin_count).toLocaleString()}</td>
+                        <td className="py-2.5 text-right text-emerald-700 font-medium">{Number(p.valid_count).toLocaleString()}</td>
+                        <td className="py-2.5 text-right text-red-600 font-medium">{Number(p.invalid_count).toLocaleString()}</td>
+                        <td className="py-2.5 text-right">
+                          <AccuracyBadge pct={accuracyPct(p.accuracy_pct, p.total_parts)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -260,23 +292,45 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
                   <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Valid</th>
                   <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Invalid</th>
                   <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Accuracy</th>
+                  {prevSnapshot && (
+                    <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">vs prev</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
-                {partTypeBreakdown.map((row, i) => (
-                  <tr
-                    key={row.part_type}
-                    className={i !== partTypeBreakdown.length - 1 ? "border-b border-grey-100" : ""}
-                  >
-                    <td className="py-2.5 font-medium text-grey-950">{row.part_type}</td>
-                    <td className="py-2.5 text-right text-grey-900">{row.total_parts}</td>
-                    <td className="py-2.5 text-right text-emerald-700 font-medium">{row.valid_count}</td>
-                    <td className="py-2.5 text-right text-red-600 font-medium">{row.invalid_count}</td>
-                    <td className="py-2.5 text-right">
-                      <AccuracyBadge pct={accuracyPct(row.accuracy_pct, row.total_parts)} />
-                    </td>
-                  </tr>
-                ))}
+                {partTypeBreakdown.map((row, i) => {
+                  const prevAcc = prevHcaMap.get(row.part_type);
+                  const delta = prevAcc != null && row.total_parts > 0
+                    ? Number(row.accuracy_pct) - prevAcc
+                    : null;
+                  return (
+                    <tr
+                      key={row.part_type}
+                      className={i !== partTypeBreakdown.length - 1 ? "border-b border-grey-100" : ""}
+                    >
+                      <td className="py-2.5 font-medium text-grey-950">{row.part_type}</td>
+                      <td className="py-2.5 text-right text-grey-900">{row.total_parts}</td>
+                      <td className="py-2.5 text-right text-emerald-700 font-medium">{row.valid_count}</td>
+                      <td className="py-2.5 text-right text-red-600 font-medium">{row.invalid_count}</td>
+                      <td className="py-2.5 text-right">
+                        <AccuracyBadge pct={accuracyPct(row.accuracy_pct, row.total_parts)} />
+                      </td>
+                      {prevSnapshot && (
+                        <td className="py-2.5 text-right text-xs font-medium tabular-nums">
+                          {delta === null ? (
+                            <span className="text-grey-300">—</span>
+                          ) : delta > 0.05 ? (
+                            <span className="text-emerald-600">↑{delta.toFixed(1)}%</span>
+                          ) : delta < -0.05 ? (
+                            <span className="text-red-500">↓{Math.abs(delta).toFixed(1)}%</span>
+                          ) : (
+                            <span className="text-grey-400">—</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
