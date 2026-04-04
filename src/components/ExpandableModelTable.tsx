@@ -14,7 +14,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function rowKey(row: ModelBreakdown) {
-    return `${row.model}__${row.year ?? ""}`;
+    return `${row.model}__${row.year ?? ""}__${row.region ?? ""}`;
   }
 
   function toggle(key: string) {
@@ -27,7 +27,10 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
 
   function recordsFor(row: ModelBreakdown) {
     return records.filter(
-      (r) => r.model === row.model && (row.year == null || r.year === row.year)
+      (r) =>
+        r.model === row.model &&
+        (row.year == null || r.year === row.year) &&
+        (row.region == null || r.region === row.region)
     );
   }
 
@@ -39,6 +42,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
           <th className="w-8 pb-2" />
           <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Model</th>
           <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Year</th>
+          <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Region</th>
           <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Parts</th>
           <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Valid</th>
           <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Invalid</th>
@@ -76,6 +80,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                 </td>
                 <td className="py-2.5 font-medium text-grey-950">{row.model}</td>
                 <td className="py-2.5 text-grey-400">{row.year ?? "—"}</td>
+                <td className="py-2.5 text-grey-400">{row.region ?? "—"}</td>
                 <td className="py-2.5 text-right text-grey-900">{row.total_parts}</td>
                 <td className="py-2.5 text-right text-emerald-700 font-medium">{row.valid_count}</td>
                 <td className="py-2.5 text-right text-red-600 font-medium">{row.invalid_count}</td>
@@ -87,7 +92,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
               {/* Expanded records */}
               {isOpen && (
                 <tr className={!isLast ? "border-b border-grey-100" : ""}>
-                  <td colSpan={7} className="p-0">
+                  <td colSpan={8} className="p-0">
                     <div className="bg-grey-50 border-t border-grey-100">
                       {rowRecords.length === 0 ? (
                         <p className="text-xs text-grey-400 px-6 py-3">No records found.</p>
@@ -95,7 +100,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-grey-100">
-                              {["VIN", "Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
+                              {["VIN", "Make", "Region", "Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
                                 <th key={h} className="text-left px-4 py-2 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap first:pl-10">
                                   {h}
                                 </th>
@@ -109,6 +114,8 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                                 className={ri !== rowRecords.length - 1 ? "border-b border-grey-100" : ""}
                               >
                                 <td className="px-4 py-2 pl-10 font-mono text-grey-400 whitespace-nowrap">{r.vin}</td>
+                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.make ?? "—"}</td>
+                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.region ?? "—"}</td>
                                 <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.part_type}</td>
                                 <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
                                 <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>

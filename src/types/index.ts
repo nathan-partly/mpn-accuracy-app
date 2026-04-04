@@ -60,6 +60,7 @@ export interface AccuracyPoint {
 export interface ModelBreakdown {
   model: string;
   year?: number;
+  region?: string;
   total_parts: number;
   valid_count: number;
   invalid_count: number;

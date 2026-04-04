@@ -221,6 +221,7 @@ export async function getModelBreakdown(
     SELECT
       COALESCE(model, 'Unknown')  AS model,
       year,
+      region,
       COUNT(*) FILTER (WHERE is_valid IS NOT NULL)  AS total_parts,
       COUNT(*) FILTER (WHERE is_valid = true)        AS valid_count,
       COUNT(*) FILTER (WHERE is_valid = false)       AS invalid_count,
@@ -233,8 +234,8 @@ export async function getModelBreakdown(
       END AS accuracy_pct
     FROM benchmark_records
     WHERE snapshot_id = ${snapshotId}
-    GROUP BY model, year
-    ORDER BY model, year
+    GROUP BY model, year, region
+    ORDER BY model, year, region
   `;
   return rows as ModelBreakdown[];
 }
