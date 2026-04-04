@@ -100,7 +100,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-grey-100">
-                              {["VIN", "Make", "Region", "Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
+                              {["VIN", "Make", "Region", "Data Provider", "Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
                                 <th key={h} className="text-left px-4 py-2 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap first:pl-10">
                                   {h}
                                 </th>
@@ -116,6 +116,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                                 <td className="px-4 py-2 pl-10 font-mono text-grey-400 whitespace-nowrap">{r.vin}</td>
                                 <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.make ?? "—"}</td>
                                 <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.region ?? "—"}</td>
+                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.upstream_provider ?? "—"}</td>
                                 <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.part_type}</td>
                                 <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
                                 <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>
