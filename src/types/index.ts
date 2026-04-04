@@ -103,6 +103,7 @@ export interface GlobalProviderStat {
 }
 
 export interface CsvRow {
+  brand?: string;
   region?: string;
   vin: string;
   make?: string;
