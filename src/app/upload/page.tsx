@@ -363,27 +363,11 @@ export default function UploadPage() {
           )}
 
           {/* Format reference + template download */}
-          <div className="mt-4 p-3 bg-grey-50 rounded-lg">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-2">
-                  CSV column format
-                </p>
-                <code className="text-xs text-grey-900 font-mono break-all">
-                  brand, region, vin, make, model, year, upstream_provider, part_type, interpreter_output, epc_output, pl24_output, is_valid, notes
-                </code>
-                <div className="mt-2 space-y-1">
-                  <p className="text-xs text-grey-400">
-                    <strong className="text-grey-900">brand</strong> — required; must match an existing brand name exactly (e.g. &quot;Ford&quot;, &quot;BMW&quot;)
-                  </p>
-                  <p className="text-xs text-grey-400">
-                    <strong className="text-grey-900">is_valid</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">true</code> match · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">false</code> no-match · <em>blank</em> = skip
-                  </p>
-                  <p className="text-xs text-grey-400">
-                    <strong className="text-grey-900">pl24_output</strong> — the MPN returned by PL24 (leave blank if not used)
-                  </p>
-                </div>
-              </div>
+          <div className="mt-4 border border-grey-100 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-grey-50 border-b border-grey-100">
+              <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest">
+                CSV columns
+              </p>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -405,7 +389,7 @@ export default function UploadPage() {
                   a.click();
                   URL.revokeObjectURL(url);
                 }}
-                className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-brand-blue border border-brand-light bg-brand-tint rounded-lg hover:bg-blue-100 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-brand-blue border border-brand-light bg-white rounded-lg hover:bg-brand-tint transition-colors"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -413,6 +397,52 @@ export default function UploadPage() {
                 Download template
               </button>
             </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-grey-100 bg-grey-50">
+                  <th className="text-left px-4 py-2 font-semibold text-grey-400 uppercase tracking-widest w-40">Column</th>
+                  <th className="text-left px-4 py-2 font-semibold text-grey-400 uppercase tracking-widest w-24">Required</th>
+                  <th className="text-left px-4 py-2 font-semibold text-grey-400 uppercase tracking-widest">Notes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-grey-100">
+                {[
+                  { col: "brand", req: true, note: 'Must match an existing brand exactly — e.g. "Ford", "BMW"' },
+                  { col: "vin", req: true, note: "Vehicle Identification Number" },
+                  { col: "part_type", req: true, note: 'E.g. "Front Bumper Cover", "Oil Filter"' },
+                  { col: "is_valid", req: true, note: (
+                    <span>
+                      <code className="bg-grey-50 border border-grey-100 px-1 rounded">true</code> = match &nbsp;·&nbsp;
+                      <code className="bg-grey-50 border border-grey-100 px-1 rounded">false</code> = no-match &nbsp;·&nbsp;
+                      <em>blank</em> = skip
+                    </span>
+                  )},
+                  { col: "interpreter_output", req: false, note: "MPN returned by the interpreter" },
+                  { col: "epc_output", req: false, note: "MPN from the original EPC" },
+                  { col: "pl24_output", req: false, note: "MPN from PL24 (non-original EPC)" },
+                  { col: "region", req: false, note: 'E.g. "EU", "US"' },
+                  { col: "make", req: false, note: "Vehicle make" },
+                  { col: "model", req: false, note: "Vehicle model" },
+                  { col: "year", req: false, note: "Vehicle year" },
+                  { col: "upstream_provider", req: false, note: 'Data provider — e.g. "ADP", "YQService"' },
+                  { col: "notes", req: false, note: "Any extra context for this row" },
+                ].map(({ col, req, note }) => (
+                  <tr key={col} className="hover:bg-grey-50 transition-colors">
+                    <td className="px-4 py-2.5">
+                      <code className="font-mono text-grey-900">{col}</code>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {req ? (
+                        <span className="inline-block px-1.5 py-0.5 text-xs font-semibold bg-red-50 text-red-600 rounded">Required</span>
+                      ) : (
+                        <span className="inline-block px-1.5 py-0.5 text-xs font-medium bg-grey-100 text-grey-400 rounded">Optional</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-grey-500">{note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
