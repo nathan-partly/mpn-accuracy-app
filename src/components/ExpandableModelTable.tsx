@@ -12,6 +12,16 @@ interface Props {
 
 export function ExpandableModelTable({ modelBreakdown, records }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expandedCells, setExpandedCells] = useState<Set<string>>(new Set());
+
+  function toggleCell(e: React.MouseEvent, key: string) {
+    e.stopPropagation(); // don't collapse the model row
+    setExpandedCells((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   function rowKey(row: ModelBreakdown) {
     return `${row.model}__${row.year ?? ""}__${row.region ?? ""}`;
@@ -142,9 +152,30 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                                       className={ri !== vinRecords.length - 1 ? "border-b border-grey-100" : ""}
                                     >
                                       <td className="px-4 py-2 pl-10 text-grey-900 whitespace-nowrap">{r.part_type}</td>
-                                      <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
-                                      <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>
-                                      <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.pl24_output ?? "—"}</td>
+                                      {(["interpreter_output", "epc_output", "pl24_output"] as const).map((field) => {
+                                        const value = r[field] ?? "—";
+                                        const cellKey = `${r.id}-${field}`;
+                                        const isExpanded = expandedCells.has(cellKey);
+                                        const isTruncatable = typeof value === "string" && value.length > 22;
+                                        return (
+                                          <td
+                                            key={field}
+                                            onClick={isTruncatable ? (e) => toggleCell(e, cellKey) : undefined}
+                                            title={isTruncatable && !isExpanded ? value : undefined}
+                                            className={`px-4 py-2 font-mono text-grey-400 ${
+                                              isTruncatable
+                                                ? "cursor-pointer hover:text-grey-600"
+                                                : ""
+                                            } ${
+                                              isExpanded
+                                                ? "whitespace-normal break-all"
+                                                : "max-w-[180px] truncate"
+                                            }`}
+                                          >
+                                            {value}
+                                          </td>
+                                        );
+                                      })}
                                       <td className="px-4 py-2">
                                         {r.is_valid === null ? (
                                           <span className="text-grey-400">Skipped</span>
