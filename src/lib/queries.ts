@@ -163,6 +163,7 @@ export async function insertRecords(
       part_type:          r.part_type,
       interpreter_output: r.interpreter_output ?? null,
       epc_output:         r.epc_output ?? null,
+      pl24_output:        r.pl24_output ?? null,
       epc_source:         r.epc_source ?? null,
       is_valid:           r.is_valid,
       notes:              r.notes ?? null,
@@ -172,12 +173,12 @@ export async function insertRecords(
       await sql`
         INSERT INTO benchmark_records
           (snapshot_id, brand_id, region, vin, make, model, year,
-           upstream_provider, part_type, interpreter_output, epc_output, epc_source, is_valid, notes)
+           upstream_provider, part_type, interpreter_output, epc_output, pl24_output, epc_source, is_valid, notes)
         VALUES
           (${v.snapshot_id}, ${v.brand_id}, ${v.region}, ${v.vin},
            ${v.make}, ${v.model}, ${v.year}, ${v.upstream_provider},
            ${v.part_type}, ${v.interpreter_output}, ${v.epc_output},
-           ${v.epc_source}, ${v.is_valid}, ${v.notes})
+           ${v.pl24_output}, ${v.epc_source}, ${v.is_valid}, ${v.notes})
       `;
     }
   }

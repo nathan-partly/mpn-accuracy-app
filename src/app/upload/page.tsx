@@ -115,6 +115,7 @@ export default function UploadPage() {
         part_type:          r.part_type?.trim(),
         interpreter_output: r.interpreter_output?.trim() || null,
         epc_output:         r.epc_output?.trim() || null,
+        pl24_output:        r.pl24_output?.trim() || null,
         epc_source:         r.epc_source?.trim() || null,
         is_valid:           parseIsValid(r.is_valid),
         notes:              r.notes?.trim() || null,

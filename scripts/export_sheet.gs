@@ -146,7 +146,7 @@ function exportBrandSheet(sheet, brandName) {
   const csvRows = [];
   csvRows.push([
     "region", "vin", "make", "model", "year", "upstream_provider",
-    "part_type", "interpreter_output", "epc_output", "is_valid", "notes",
+    "part_type", "interpreter_output", "epc_output", "pl24_output", "epc_source", "is_valid", "notes",
   ]);
 
   // Data starts at row 3 (index 2); skip blank rows (used as group separators)
@@ -166,6 +166,8 @@ function exportBrandSheet(sheet, brandName) {
       const interpreterRaw = String(row[group.interpreterCol] || "").trim();
       const epcRaw =
         group.epcCol !== -1 ? String(row[group.epcCol] || "").trim() : "";
+      const pl24Raw =
+        group.pl24Col !== -1 ? String(row[group.pl24Col] || "").trim() : "";
 
       // Determine is_valid
       let isValid = "";
@@ -194,9 +196,15 @@ function exportBrandSheet(sheet, brandName) {
         isValid = "";
       }
 
-      // Skip rows where there's no interpreter output AND no EPC output
+      // Skip rows where there's no interpreter output AND no EPC or PL24 output
       // (completely empty part type for this VIN)
-      if (!interpreterRaw && !epcRaw) continue;
+      if (!interpreterRaw && !epcRaw && !pl24Raw) continue;
+
+      // Derive epc_source from which output columns are populated
+      let epcSource = "";
+      if (epcRaw && pl24Raw) epcSource = "Both";
+      else if (epcRaw) epcSource = "Original EPC";
+      else if (pl24Raw) epcSource = "PL24";
 
       csvRows.push([
         region,
@@ -208,6 +216,8 @@ function exportBrandSheet(sheet, brandName) {
         group.partType,
         interpreterRaw,
         epcRaw,
+        pl24Raw,
+        epcSource,
         isValid,
         "", // notes
       ]);

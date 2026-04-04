@@ -43,8 +43,9 @@ export interface BenchmarkRecord {
   part_type: string;
   interpreter_output?: string;
   epc_output?: string;
+  pl24_output?: string;
   is_valid: boolean | null; // null = skipped (missing diagram/hotspot etc.)
-  epc_source?: string | null; // 'Original EPC' | 'Non-Original EPC' | 'Both' | null
+  epc_source?: string | null; // 'Original EPC' | 'PL24' | 'Both' | null
   notes?: string;
   created_at: string;
 }
@@ -111,6 +112,7 @@ export interface CsvRow {
   part_type: string;
   interpreter_output?: string;
   epc_output?: string;
+  pl24_output?: string;
   epc_source?: string;
   is_valid: string | boolean;
   notes?: string;

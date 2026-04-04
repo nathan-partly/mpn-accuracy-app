@@ -26,6 +26,7 @@ export async function POST(req: Request) {
       part_type: string;
       interpreter_output?: string | null;
       epc_output?: string | null;
+      pl24_output?: string | null;
       epc_source?: string | null;
       is_valid: boolean | null;
       notes?: string | null;
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
     upstream_provider: r.upstream_provider ?? undefined,
     interpreter_output: r.interpreter_output ?? undefined,
     epc_output: r.epc_output ?? undefined,
+    pl24_output: r.pl24_output ?? undefined,
     epc_source: r.epc_source ?? undefined,
     is_valid: r.is_valid,
     notes: r.notes ?? undefined,

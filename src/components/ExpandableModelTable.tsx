@@ -127,7 +127,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="border-b border-grey-100">
-                                    {["Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
+                                    {["Part Type", "Interpreter Output", "EPC Output", "PL24 Output", "EPC Source", "Result"].map((h) => (
                                       <th key={h} className="text-left px-4 py-2 pl-10 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap">
                                         {h}
                                       </th>
@@ -143,13 +143,14 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                                       <td className="px-4 py-2 pl-10 text-grey-900 whitespace-nowrap">{r.part_type}</td>
                                       <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
                                       <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>
+                                      <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.pl24_output ?? "—"}</td>
                                       <td className="px-4 py-2 whitespace-nowrap">
-                                        {r.epc_source === "Non-Original EPC" ? (
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">Non-Original</span>
+                                        {r.epc_source === "PL24" ? (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">PL24</span>
                                         ) : r.epc_source === "Both" ? (
                                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">Both</span>
                                         ) : r.epc_source === "Original EPC" ? (
-                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-grey-50 text-grey-400 border border-grey-100">Original</span>
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-grey-50 text-grey-400 border border-grey-100">Original EPC</span>
                                         ) : (
                                           <span className="text-grey-300">—</span>
                                         )}
