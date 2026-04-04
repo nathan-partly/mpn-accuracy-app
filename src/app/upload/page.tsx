@@ -351,7 +351,7 @@ export default function UploadPage() {
       </div>
 
       {/* Step 3: Preview & confirm */}
-      {state === "preview" && (
+      {(state === "preview" || state === "uploading") && (
         <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-5">
           <div className="h-1 bg-brand-blue" />
           <div className="p-6">
