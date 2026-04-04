@@ -14,6 +14,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { AccuracyBadge } from "@/components/AccuracyBadge";
 import { AccuracyChart } from "@/components/AccuracyChart";
 import { ExpandableModelTable } from "@/components/ExpandableModelTable";
+import { DeleteSnapshotButton } from "@/components/DeleteSnapshotButton";
 import { formatDate, formatPct, accuracyPct } from "@/lib/utils";
 
 export const revalidate = 60;
@@ -129,36 +130,45 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
             </p>
             <div className="space-y-2">
               {snapshots.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/brands/${brand.id}?snapshot=${s.id}`}
-                  className={`block rounded-lg border px-3 py-2.5 transition-colors text-sm ${
-                    s.id === activeSnapshot.id
-                      ? "border-brand-blue bg-brand-tint"
-                      : "border-grey-100 hover:bg-grey-50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`font-semibold ${
-                        s.id === activeSnapshot.id
-                          ? "text-brand-blue"
-                          : "text-grey-950"
-                      }`}
-                    >
-                      {formatDate(s.snapshot_date)}
-                    </span>
-                    <AccuracyBadge pct={accuracyPct(s.accuracy_pct, s.total_parts)} />
-                  </div>
-                  {s.notes && (
-                    <p className="text-xs text-grey-400 mt-1 truncate">
-                      {s.notes}
+                <div key={s.id} className="relative group">
+                  <Link
+                    href={`/brands/${brand.id}?snapshot=${s.id}`}
+                    className={`block rounded-lg border px-3 py-2.5 transition-colors text-sm ${
+                      s.id === activeSnapshot.id
+                        ? "border-brand-blue bg-brand-tint"
+                        : "border-grey-100 hover:bg-grey-50"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`font-semibold ${
+                          s.id === activeSnapshot.id
+                            ? "text-brand-blue"
+                            : "text-grey-950"
+                        }`}
+                      >
+                        {formatDate(s.snapshot_date)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <AccuracyBadge pct={accuracyPct(s.accuracy_pct, s.total_parts)} />
+                        <DeleteSnapshotButton
+                          snapshotId={s.id}
+                          brandId={brand.id}
+                          label={formatDate(s.snapshot_date)}
+                          isActive={s.id === activeSnapshot.id}
+                        />
+                      </div>
+                    </div>
+                    {s.notes && (
+                      <p className="text-xs text-grey-400 mt-1 truncate">
+                        {s.notes}
+                      </p>
+                    )}
+                    <p className="text-xs text-grey-400 mt-1">
+                      {s.total_parts.toLocaleString()} parts · {s.total_vins} VINs
                     </p>
-                  )}
-                  <p className="text-xs text-grey-400 mt-1">
-                    {s.total_parts.toLocaleString()} parts · {s.total_vins} VINs
-                  </p>
-                </Link>
+                  </Link>
+                </div>
               ))}
             </div>
           </div>
