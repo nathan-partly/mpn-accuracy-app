@@ -116,7 +116,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                             <div key={vin} className={!isLastVin ? "border-b border-grey-100" : ""}>
                               {/* VIN sub-header */}
                               <div className="flex items-center gap-4 px-10 py-2 bg-grey-100 border-b border-grey-100">
-                                <span className="font-mono text-xs text-grey-400">{vin}</span>
+                                <span className="font-mono text-xs text-grey-400">{first.vin}</span>
                                 {first.make && (
                                   <span className="text-xs text-grey-600 font-medium">{first.make}</span>
                                 )}
