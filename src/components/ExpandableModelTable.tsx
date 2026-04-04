@@ -145,13 +145,16 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                                       <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
                                       <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>
                                       <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.pl24_output ?? "—"}</td>
-                                      <td className="px-4 py-2 whitespace-nowrap">
+                                      <td className="px-4 py-2">
                                         {r.is_valid === null ? (
-                                          <span className="text-grey-400" title={r.notes ?? undefined}>{r.notes ?? "N/A"}</span>
+                                          <span className="text-grey-400">Skipped</span>
                                         ) : r.is_valid ? (
                                           <span className="text-emerald-700 font-semibold">Valid</span>
                                         ) : (
                                           <span className="text-red-600 font-semibold">Invalid</span>
+                                        )}
+                                        {r.notes && (
+                                          <p className="text-grey-400 text-xs mt-0.5 font-normal">{r.notes}</p>
                                         )}
                                       </td>
                                     </tr>
