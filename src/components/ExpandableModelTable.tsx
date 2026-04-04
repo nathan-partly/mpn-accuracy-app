@@ -34,11 +34,21 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
     );
   }
 
+  // Group records by VIN so each VIN gets a sub-header
+  function groupByVin(recs: BenchmarkRecord[]): Map<string, BenchmarkRecord[]> {
+    const map = new Map<string, BenchmarkRecord[]>();
+    for (const r of recs) {
+      const existing = map.get(r.vin) ?? [];
+      existing.push(r);
+      map.set(r.vin, existing);
+    }
+    return map;
+  }
+
   return (
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-grey-100">
-          {/* chevron column */}
           <th className="w-8 pb-2" />
           <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Model</th>
           <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Year</th>
@@ -55,6 +65,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
           const isOpen = expanded.has(key);
           const rowRecords = isOpen ? recordsFor(row) : [];
           const isLast = i === modelBreakdown.length - 1;
+          const vinGroups = groupByVin(rowRecords);
 
           return (
             <Fragment key={key}>
@@ -89,7 +100,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                 </td>
               </tr>
 
-              {/* Expanded records */}
+              {/* Expanded records grouped by VIN */}
               {isOpen && (
                 <tr className={!isLast ? "border-b border-grey-100" : ""}>
                   <td colSpan={8} className="p-0">
@@ -97,53 +108,68 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                       {rowRecords.length === 0 ? (
                         <p className="text-xs text-grey-400 px-6 py-3">No records found.</p>
                       ) : (
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="border-b border-grey-100">
-                              {["VIN", "Make", "Region", "Data Provider", "Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
-                                <th key={h} className="text-left px-4 py-2 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap first:pl-10">
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rowRecords.map((r, ri) => (
-                              <tr
-                                key={r.id}
-                                className={ri !== rowRecords.length - 1 ? "border-b border-grey-100" : ""}
-                              >
-                                <td className="px-4 py-2 pl-10 font-mono text-grey-400 whitespace-nowrap">{r.vin}</td>
-                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.make ?? "—"}</td>
-                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.region ?? "—"}</td>
-                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.upstream_provider ?? "—"}</td>
-                                <td className="px-4 py-2 text-grey-900 whitespace-nowrap">{r.part_type}</td>
-                                <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
-                                <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>
-                                <td className="px-4 py-2 whitespace-nowrap">
-                                  {r.epc_source === "Non-Original EPC" ? (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">Non-Original</span>
-                                  ) : r.epc_source === "Both" ? (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">Both</span>
-                                  ) : r.epc_source === "Original EPC" ? (
-                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-grey-50 text-grey-400 border border-grey-100">Original</span>
-                                  ) : (
-                                    <span className="text-grey-300">—</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2 whitespace-nowrap">
-                                  {r.is_valid === null ? (
-                                    <span className="text-grey-400" title={r.notes ?? undefined}>{r.notes ?? "N/A"}</span>
-                                  ) : r.is_valid ? (
-                                    <span className="text-emerald-700 font-semibold">Valid</span>
-                                  ) : (
-                                    <span className="text-red-600 font-semibold">Invalid</span>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                        Array.from(vinGroups.entries()).map(([vin, vinRecords], vi) => {
+                          const first = vinRecords[0];
+                          const isLastVin = vi === vinGroups.size - 1;
+                          return (
+                            <div key={vin} className={!isLastVin ? "border-b border-grey-100" : ""}>
+                              {/* VIN sub-header */}
+                              <div className="flex items-center gap-4 px-10 py-2 bg-grey-100 border-b border-grey-100">
+                                <span className="font-mono text-xs text-grey-400">{vin}</span>
+                                {first.make && (
+                                  <span className="text-xs text-grey-600 font-medium">{first.make}</span>
+                                )}
+                                {first.upstream_provider && (
+                                  <span className="text-xs text-grey-400">{first.upstream_provider}</span>
+                                )}
+                              </div>
+                              {/* Part rows */}
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="border-b border-grey-100">
+                                    {["Part Type", "Interpreter Output", "EPC Output", "EPC Source", "Result"].map((h) => (
+                                      <th key={h} className="text-left px-4 py-2 pl-10 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap">
+                                        {h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {vinRecords.map((r, ri) => (
+                                    <tr
+                                      key={r.id}
+                                      className={ri !== vinRecords.length - 1 ? "border-b border-grey-100" : ""}
+                                    >
+                                      <td className="px-4 py-2 pl-10 text-grey-900 whitespace-nowrap">{r.part_type}</td>
+                                      <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.interpreter_output ?? "—"}</td>
+                                      <td className="px-4 py-2 font-mono text-grey-400 max-w-[180px] truncate">{r.epc_output ?? "—"}</td>
+                                      <td className="px-4 py-2 whitespace-nowrap">
+                                        {r.epc_source === "Non-Original EPC" ? (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">Non-Original</span>
+                                        ) : r.epc_source === "Both" ? (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">Both</span>
+                                        ) : r.epc_source === "Original EPC" ? (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-grey-50 text-grey-400 border border-grey-100">Original</span>
+                                        ) : (
+                                          <span className="text-grey-300">—</span>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2 whitespace-nowrap">
+                                        {r.is_valid === null ? (
+                                          <span className="text-grey-400" title={r.notes ?? undefined}>{r.notes ?? "N/A"}</span>
+                                        ) : r.is_valid ? (
+                                          <span className="text-emerald-700 font-semibold">Valid</span>
+                                        ) : (
+                                          <span className="text-red-600 font-semibold">Invalid</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </td>
