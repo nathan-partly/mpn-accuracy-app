@@ -58,7 +58,7 @@ export default function UploadPage() {
           return;
         }
 
-        const rows = results.data as CsvRow[];
+        const rows = results.data as unknown as CsvRow[];
         const validRows = rows.filter(
           (r) => r.vin?.trim() && r.part_type?.trim()
         );
