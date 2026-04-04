@@ -409,7 +409,7 @@ export default function UploadPage() {
                 {[
                   { col: "brand", req: true, note: 'Must match an existing brand exactly — e.g. "Ford", "BMW"' },
                   { col: "vin", req: true, note: "Vehicle Identification Number" },
-                  { col: "part_type", req: true, note: 'E.g. "Front Bumper Cover", "Oil Filter"' },
+                  { col: "part_type", req: true, note: 'The HCA (Hella Category Attribute) — e.g. "Front Bumper Cover", "Oil Filter"' },
                   { col: "is_valid", req: true, note: (
                     <span>
                       <code className="bg-grey-50 border border-grey-100 px-1 rounded">true</code> = match &nbsp;·&nbsp;

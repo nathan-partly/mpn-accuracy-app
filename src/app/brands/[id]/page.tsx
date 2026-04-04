@@ -250,12 +250,12 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
           <div className="h-1 bg-brand-blue" />
           <div className="p-5">
             <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-4">
-              Breakdown by Part Type
+              Breakdown by HCA
             </p>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-grey-100">
-                  <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Part Type</th>
+                  <th className="text-left pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">HCA</th>
                   <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Total</th>
                   <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Valid</th>
                   <th className="text-right pb-2 text-xs text-grey-400 font-semibold uppercase tracking-widest">Invalid</th>
