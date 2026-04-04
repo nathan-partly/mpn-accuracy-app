@@ -300,14 +300,17 @@ export default function UploadPage() {
                   Expected CSV format
                 </p>
                 <code className="text-xs text-grey-900 font-mono break-all">
-                  region, vin, make, model, year, upstream_provider, part_type, interpreter_output, epc_output, epc_source, is_valid, notes
+                  region, vin, make, model, year, upstream_provider, part_type, interpreter_output, epc_output, pl24_output, epc_source, is_valid, notes
                 </code>
                 <div className="mt-2 space-y-1">
                   <p className="text-xs text-grey-400">
                     <strong className="text-grey-900">is_valid</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">true</code> match · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">false</code> no-match · <em>blank</em> = skip (missing diagram, VIN not found, etc.)
                   </p>
                   <p className="text-xs text-grey-400">
-                    <strong className="text-grey-900">epc_source</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Original EPC</code> · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Non-Original EPC</code> · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Both</code> · or leave blank
+                    <strong className="text-grey-900">epc_source</strong> — <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Original EPC</code> · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">PL24</code> · <code className="bg-white px-1 py-0.5 rounded border border-grey-100">Both</code> · or leave blank
+                  </p>
+                  <p className="text-xs text-grey-400">
+                    <strong className="text-grey-900">pl24_output</strong> — the MPN returned by PL24 for this part (leave blank if PL24 wasn&apos;t used)
                   </p>
                   <p className="text-xs text-grey-400">
                     Only <strong className="text-grey-900">vin</strong>, <strong className="text-grey-900">part_type</strong> and <strong className="text-grey-900">is_valid</strong> are required. All other columns are optional.
@@ -318,17 +321,19 @@ export default function UploadPage() {
                 onClick={() => {
                   const rows = [
                     // Headers
-                    ["region", "vin", "make", "model", "year", "upstream_provider", "part_type", "interpreter_output", "epc_output", "epc_source", "is_valid", "notes"],
-                    // Valid match — Original EPC
-                    ["EU", "VIN1AB23CD45EF01", "Toyota", "RAV4", "2023", "YQService", "Front Bumper Cover", "521194A922", "521194A922", "Original EPC", "true", ""],
-                    // Valid match — Non-Original EPC
-                    ["EU", "VIN2GH67IJ89KL02", "Toyota", "RAV4", "2023", "ADP", "Radiator", "164000A040", "164000A040", "Non-Original EPC", "true", ""],
+                    ["region", "vin", "make", "model", "year", "upstream_provider", "part_type", "interpreter_output", "epc_output", "pl24_output", "epc_source", "is_valid", "notes"],
+                    // Valid match — Original EPC only
+                    ["EU", "VIN1AB23CD45EF01", "Toyota", "RAV4", "2023", "YQService", "Front Bumper Cover", "521194A922", "521194A922", "", "Original EPC", "true", ""],
+                    // Valid match — PL24 only
+                    ["EU", "VIN2GH67IJ89KL02", "Toyota", "RAV4", "2023", "ADP", "Radiator", "164000A040", "", "164000A040", "PL24", "true", ""],
+                    // Valid match — both Original EPC and PL24
+                    ["EU", "VIN3MN01OP23QR03", "Toyota", "RAV4", "2023", "YQService", "Cabin Air Filter", "1780A003", "1780A003", "1780A003", "Both", "true", ""],
                     // Invalid — interpreter MPN differs from EPC
-                    ["EU", "VIN3MN01OP23QR03", "Toyota", "RAV4", "2022", "YQService", "Left Headlamp Assembly", "8118542E10", "8118542E11", "Original EPC", "false", ""],
+                    ["EU", "VIN4ST45UV67WX04", "Toyota", "RAV4", "2022", "YQService", "Left Headlamp Assembly", "8118542E10", "8118542E11", "", "Original EPC", "false", ""],
                     // Skipped — missing diagram (interpreter_output signals untestable; leave is_valid blank)
-                    ["EU", "VIN4ST45UV67WX04", "Toyota", "Camry", "2021", "YQService", "Roof Rack", "Missing Diagram", "", "", "", "No diagram in EPC"],
+                    ["EU", "VIN5AB12CD34EF05", "Toyota", "Camry", "2021", "YQService", "Roof Rack", "Missing Diagram", "", "", "", "", "No diagram in EPC"],
                     // Skipped — VIN not found in EPC
-                    ["US", "VIN5YZ89AB12CD05", "Toyota", "Camry", "2020", "YQService", "Oil Filter", "VIN not found", "", "", "", "VIN absent from EPC"],
+                    ["US", "VIN6YZ89AB12CD06", "Toyota", "Camry", "2020", "YQService", "Oil Filter", "VIN not found", "", "", "", "", "VIN absent from EPC"],
                   ];
                   const csv = rows.map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");
                   const blob = new Blob([csv], { type: "text/csv" });
