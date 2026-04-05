@@ -52,7 +52,7 @@ export default function QualityUploadPage() {
           return;
         }
 
-        const parsed: ParsedRow[] = (results.data as QualityCsvRow[])
+        const parsed: ParsedRow[] = (results.data as unknown as QualityCsvRow[])
           .filter((r) => r.brand?.trim())
           .map((r) => ({
             brand: r.brand.trim().toUpperCase(),
