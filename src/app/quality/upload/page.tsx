@@ -136,6 +136,8 @@ export default function QualityUploadPage() {
   const fmt = (v: number | null) =>
     v == null ? <span className="text-grey-300">—</span> : `${v.toFixed(2)}%`;
 
+  const isUploading = (state as string) === "uploading";
+
   if (state === "success") {
     return (
       <div className="max-w-2xl mx-auto px-6 py-16 text-center">
@@ -297,10 +299,10 @@ export default function QualityUploadPage() {
           <div className="flex gap-3">
             <button
               onClick={handleUpload}
-              disabled={state === "uploading"}
+              disabled={isUploading}
               className="px-5 py-2.5 bg-brand-blue text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
-              {state === "uploading" ? "Saving…" : `Save snapshot · ${snapshotDate}`}
+              {isUploading ? "Saving…" : `Save snapshot · ${snapshotDate}`}
             </button>
             <button
               onClick={() => { setState("idle"); setRows([]); if (fileRef.current) fileRef.current.value = ""; }}
