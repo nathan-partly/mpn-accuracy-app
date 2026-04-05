@@ -133,6 +133,12 @@ export interface QualityBrandData {
   classification_pct: number | null;
   annotation_pct: number | null;
   total_diagrams: number | null;
+  vio_rank: number | null;
+  vio_combined_pct: number | null;
+  vio_nz_pct: number | null;
+  vio_uk_pct: number | null;
+  vio_au_pct: number | null;
+  vio_us_pct: number | null;
   level: BrandLevel;  // computed
 }
 

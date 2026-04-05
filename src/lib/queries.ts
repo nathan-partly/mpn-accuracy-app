@@ -522,10 +522,11 @@ export async function getLatestQualitySnapshot(): Promise<{ snapshot: QualitySna
   const snapshot = snapshots[0] as QualitySnapshot;
 
   const rows = await sql`
-    SELECT id, snapshot_id, brand, classification_pct, annotation_pct, total_diagrams
+    SELECT id, snapshot_id, brand, classification_pct, annotation_pct, total_diagrams,
+           vio_rank, vio_combined_pct, vio_nz_pct, vio_uk_pct, vio_au_pct, vio_us_pct
     FROM quality_brand_data
     WHERE snapshot_id = ${snapshot.id}
-    ORDER BY total_diagrams DESC NULLS LAST, brand ASC
+    ORDER BY vio_rank ASC NULLS LAST, total_diagrams DESC NULLS LAST, brand ASC
   `;
 
   const brands = (rows as Omit<QualityBrandData, "level">[]).map((r) => ({

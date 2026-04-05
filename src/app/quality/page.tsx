@@ -11,26 +11,52 @@ export const metadata = {
 
 export const revalidate = 60;
 
-function pct(v: number | null) {
+function vioPct(v: number | null) {
   if (v == null) return "—";
-  return `${Number(v).toFixed(1)}%`;
+  return `${Number(v).toFixed(2)}%`;
 }
 
 function CoverageBar({ value, threshold }: { value: number | null; threshold: number }) {
   if (value == null) return <span className="text-grey-300 text-xs">—</span>;
   const pctVal = Math.min(100, value);
   const reached = value >= threshold;
+  const barColor = reached
+    ? "bg-brand-blue"
+    : value >= threshold * 0.5
+    ? "bg-amber-400"
+    : value > 0
+    ? "bg-grey-400"
+    : "bg-grey-200";
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-grey-100 rounded-full overflow-hidden" style={{ minWidth: 60 }}>
         <div
-          className={`h-full rounded-full ${reached ? "bg-brand-blue" : value >= threshold * 0.5 ? "bg-amber-400" : "bg-grey-300"}`}
-          style={{ width: `${pctVal}%` }}
+          className={`h-full rounded-full ${barColor}`}
+          style={{ width: `${Math.max(pctVal, pctVal > 0 ? 2 : 0)}%` }}
         />
       </div>
       <span className={`text-xs font-semibold tabular-nums w-12 text-right ${reached ? "text-brand-blue" : "text-grey-700"}`}>
         {pctVal.toFixed(1)}%
       </span>
+    </div>
+  );
+}
+
+function MarketPills({ brand }: { brand: QualityBrandData }) {
+  const markets = [
+    { label: "NZ", value: brand.vio_nz_pct },
+    { label: "UK", value: brand.vio_uk_pct },
+    { label: "AU", value: brand.vio_au_pct },
+    { label: "US", value: brand.vio_us_pct },
+  ].filter((m) => m.value != null && m.value > 0);
+  if (markets.length === 0) return <span className="text-grey-300 text-xs">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {markets.map((m) => (
+        <span key={m.label} className="text-xs text-grey-500 bg-grey-50 border border-grey-100 px-1.5 py-0.5 rounded tabular-nums">
+          {m.label} {m.value!.toFixed(1)}%
+        </span>
+      ))}
     </div>
   );
 }
@@ -82,15 +108,15 @@ export default async function QualityPage() {
   const l0 = brands.filter((b) => b.level === "L0");
   const unsupported = brands.filter((b) => b.level === "Unsupported");
 
-  const avgClassification = brands.reduce((s, b) => s + (b.classification_pct ?? 0), 0) / brands.length;
-  const avgAnnotation = brands.reduce((s, b) => s + (b.annotation_pct ?? 0), 0) / brands.length;
+  // Sort by VIO rank within each level group
+  const sortByVio = (arr: QualityBrandData[]) =>
+    [...arr].sort((a, b) => (a.vio_rank ?? 999) - (b.vio_rank ?? 999));
 
-  // Group brands by level for display
   const grouped: QualityBrandData[] = [
-    ...brands.filter((b) => b.level === "L2").sort((a, b) => (b.total_diagrams ?? 0) - (a.total_diagrams ?? 0)),
-    ...brands.filter((b) => b.level === "L1").sort((a, b) => (b.total_diagrams ?? 0) - (a.total_diagrams ?? 0)),
-    ...brands.filter((b) => b.level === "L0").sort((a, b) => (b.total_diagrams ?? 0) - (a.total_diagrams ?? 0)),
-    ...brands.filter((b) => b.level === "Unsupported").sort((a, b) => (b.total_diagrams ?? 0) - (a.total_diagrams ?? 0)),
+    ...sortByVio(l2),
+    ...sortByVio(l1),
+    ...sortByVio(l0),
+    ...sortByVio(unsupported),
   ];
 
   return (
@@ -116,8 +142,8 @@ export default async function QualityPage() {
         </Link>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-10">
+      {/* KPI cards — 4 level counts only */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         <KpiCard
           label="Level 2 Brands"
           value={l2.length}
@@ -137,17 +163,7 @@ export default async function QualityPage() {
         <KpiCard
           label="Unsupported"
           value={unsupported.length}
-          sub="No coverage data"
-        />
-        <KpiCard
-          label="Avg Classification"
-          value={`${avgClassification.toFixed(1)}%`}
-          sub={`across ${brands.length} brands`}
-        />
-        <KpiCard
-          label="Avg Annotation"
-          value={`${avgAnnotation.toFixed(1)}%`}
-          sub={`across ${brands.length} brands`}
+          sub="No EPC data"
         />
       </div>
 
@@ -168,7 +184,7 @@ export default async function QualityPage() {
             Below L1 threshold
           </span>
           <span className="ml-auto text-grey-400">
-            Bars show progress toward L2 (80%) threshold
+            Ranked by VIO market share · bars show progress toward L2 (80%)
           </span>
         </div>
       </div>
@@ -183,31 +199,35 @@ export default async function QualityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-grey-100">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">#</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Total Diagrams</th>
-                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 160 }}>Classification</th>
-                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 160 }}>Annotation</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO Rank</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO %</th>
+                <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
+                <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Classification</th>
+                <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Annotation</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
               </tr>
             </thead>
             <tbody>
               {grouped.map((brand, i) => (
                 <tr key={brand.id} className={i !== grouped.length - 1 ? "border-b border-grey-100" : ""}>
-                  <td className="px-5 py-3.5 text-grey-400 text-xs tabular-nums">{i + 1}</td>
-                  <td className="px-5 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
-                  <td className="px-5 py-3.5 text-right text-grey-500 tabular-nums">
-                    {brand.total_diagrams != null
-                      ? brand.total_diagrams.toLocaleString()
-                      : <span className="text-grey-300">—</span>}
+                  <td className="px-4 py-3.5 text-grey-400 text-xs tabular-nums text-center">
+                    {brand.vio_rank ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
+                  <td className="px-4 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
+                  <td className="px-4 py-3.5 text-right text-grey-700 tabular-nums font-medium">
+                    {vioPct(brand.vio_combined_pct)}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <MarketPills brand={brand} />
+                  </td>
+                  <td className="px-4 py-3.5" style={{ minWidth: 150 }}>
                     <CoverageBar value={brand.classification_pct} threshold={80} />
                   </td>
-                  <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
+                  <td className="px-4 py-3.5" style={{ minWidth: 150 }}>
                     <CoverageBar value={brand.annotation_pct} threshold={80} />
                   </td>
-                  <td className="px-5 py-3.5 text-right">
+                  <td className="px-4 py-3.5 text-right">
                     <LevelBadge level={brand.level} />
                   </td>
                 </tr>
