@@ -8,6 +8,10 @@ import type {
   PartTypeBreakdown,
   ProviderBreakdown,
   RegionBreakdown,
+  QualitySnapshot,
+  QualityBrandData,
+  QualityTrendPoint,
+  BrandLevel,
   GlobalProviderStat,
   SnapshotDiff,
   ProviderAccuracyStat,
@@ -476,4 +480,126 @@ export async function getGlobalStats() {
     WHERE s.id IS NOT NULL
   `;
   return rows[0];
+}
+
+// ─── Quality ──────────────────────────────────────────────────────────────────
+
+function computeLevel(classification_pct: number | null, annotation_pct: number | null): BrandLevel {
+  const c = classification_pct ?? 0;
+  const a = annotation_pct ?? 0;
+  if (c >= 80 && a >= 80) return "L2";
+  if (c >= 20 && a >= 20) return "L1";
+  if (c > 0 || a > 0) return "L0";
+  return "Unsupported";
+}
+
+export async function getAllQualitySnapshots(): Promise<QualitySnapshot[]> {
+  const rows = await sql`
+    SELECT
+      qs.id,
+      qs.snapshot_date,
+      qs.notes,
+      qs.uploaded_by,
+      qs.created_at,
+      COUNT(qb.id) AS brand_count
+    FROM quality_snapshots qs
+    LEFT JOIN quality_brand_data qb ON qb.snapshot_id = qs.id
+    GROUP BY qs.id
+    ORDER BY qs.snapshot_date DESC
+  `;
+  return rows as QualitySnapshot[];
+}
+
+export async function getLatestQualitySnapshot(): Promise<{ snapshot: QualitySnapshot; brands: QualityBrandData[] } | null> {
+  const snapshots = await sql`
+    SELECT id, snapshot_date, notes, uploaded_by, created_at,
+      (SELECT COUNT(*) FROM quality_brand_data WHERE snapshot_id = qs.id) AS brand_count
+    FROM quality_snapshots qs
+    ORDER BY snapshot_date DESC
+    LIMIT 1
+  `;
+  if (snapshots.length === 0) return null;
+  const snapshot = snapshots[0] as QualitySnapshot;
+
+  const rows = await sql`
+    SELECT id, snapshot_id, brand, classification_pct, annotation_pct, total_diagrams
+    FROM quality_brand_data
+    WHERE snapshot_id = ${snapshot.id}
+    ORDER BY total_diagrams DESC NULLS LAST, brand ASC
+  `;
+
+  const brands = (rows as Omit<QualityBrandData, "level">[]).map((r) => ({
+    ...r,
+    level: computeLevel(r.classification_pct, r.annotation_pct),
+  }));
+
+  return { snapshot, brands };
+}
+
+export async function getQualityTrendForBrand(brand: string): Promise<QualityTrendPoint[]> {
+  const rows = await sql`
+    SELECT
+      qs.snapshot_date,
+      qb.classification_pct,
+      qb.annotation_pct,
+      qb.total_diagrams
+    FROM quality_brand_data qb
+    JOIN quality_snapshots qs ON qs.id = qb.snapshot_id
+    WHERE UPPER(qb.brand) = UPPER(${brand})
+    ORDER BY qs.snapshot_date ASC
+  `;
+  return rows as QualityTrendPoint[];
+}
+
+export async function getQualityTrendForTopBrands(): Promise<{ brand: string; points: QualityTrendPoint[] }[]> {
+  // Get the top brands by total_diagrams from the latest snapshot
+  const topBrands = await sql`
+    SELECT DISTINCT qb.brand
+    FROM quality_brand_data qb
+    JOIN quality_snapshots qs ON qs.id = qb.snapshot_id
+    WHERE qs.id = (SELECT id FROM quality_snapshots ORDER BY snapshot_date DESC LIMIT 1)
+    ORDER BY qb.brand ASC
+    LIMIT 10
+  `;
+
+  const brands = topBrands.map((r: { brand: string }) => r.brand);
+  const result: { brand: string; points: QualityTrendPoint[] }[] = [];
+
+  for (const brand of brands) {
+    const points = await getQualityTrendForBrand(brand);
+    result.push({ brand, points });
+  }
+  return result;
+}
+
+export async function createQualitySnapshot(
+  snapshotDate: string,
+  rows: { brand: string; classification_pct: number | null; annotation_pct: number | null; total_diagrams: number | null }[],
+  uploadedBy?: string,
+  notes?: string
+): Promise<number> {
+  const [snapshot] = await sql`
+    INSERT INTO quality_snapshots (snapshot_date, uploaded_by, notes)
+    VALUES (${snapshotDate}, ${uploadedBy ?? null}, ${notes ?? null})
+    RETURNING id
+  `;
+  const snapshotId = snapshot.id as number;
+
+  for (const row of rows) {
+    await sql`
+      INSERT INTO quality_brand_data (snapshot_id, brand, classification_pct, annotation_pct, total_diagrams)
+      VALUES (
+        ${snapshotId},
+        ${row.brand},
+        ${row.classification_pct},
+        ${row.annotation_pct},
+        ${row.total_diagrams}
+      )
+      ON CONFLICT (snapshot_id, brand) DO UPDATE SET
+        classification_pct = EXCLUDED.classification_pct,
+        annotation_pct     = EXCLUDED.annotation_pct,
+        total_diagrams     = EXCLUDED.total_diagrams
+    `;
+  }
+  return snapshotId;
 }

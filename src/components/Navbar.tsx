@@ -10,23 +10,28 @@ const sections = [
     href: "/coverage",
     label: "Coverage",
     match: (p: string) => p.startsWith("/coverage"),
+    upload: null,
   },
   {
     href: "/accuracy",
     label: "Accuracy",
     match: (p: string) =>
       p === "/accuracy" || p.startsWith("/brands") || p === "/upload",
+    upload: { href: "/upload", label: "Upload Results" },
   },
   {
     href: "/quality",
     label: "Quality",
     match: (p: string) => p.startsWith("/quality"),
+    upload: { href: "/quality/upload", label: "Upload Snapshot" },
   },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
+
+  const activeSection = sections.find((s) => s.match(pathname));
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-grey-100 h-16">
@@ -59,8 +64,21 @@ export function Navbar() {
           ))}
         </nav>
 
-        {/* User */}
-        <div className="flex items-center gap-3">
+        {/* Right side: upload link for active section + user */}
+        <div className="flex items-center gap-4">
+          {activeSection?.upload && (
+            <Link
+              href={activeSection.upload.href}
+              className={clsx(
+                "text-xs font-semibold transition-colors",
+                pathname === activeSection.upload.href
+                  ? "text-brand-blue"
+                  : "text-grey-400 hover:text-grey-900"
+              )}
+            >
+              {activeSection.upload.label}
+            </Link>
+          )}
           <span className="text-grey-400 text-xs hidden sm:block">
             {session?.user?.email}
           </span>

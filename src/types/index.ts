@@ -113,6 +113,43 @@ export interface ProviderAccuracyStat {
   pct: number; // share of total VINs
 }
 
+// ─── Quality ─────────────────────────────────────────────────────────────────
+
+export type BrandLevel = "L2" | "L1" | "L0" | "Unsupported";
+
+export interface QualitySnapshot {
+  id: number;
+  snapshot_date: string;
+  notes?: string;
+  uploaded_by?: string;
+  created_at: string;
+  brand_count: number;
+}
+
+export interface QualityBrandData {
+  id: number;
+  snapshot_id: number;
+  brand: string;
+  classification_pct: number | null;
+  annotation_pct: number | null;
+  total_diagrams: number | null;
+  level: BrandLevel;  // computed
+}
+
+export interface QualityTrendPoint {
+  snapshot_date: string;
+  classification_pct: number | null;
+  annotation_pct: number | null;
+  total_diagrams: number | null;
+}
+
+export interface QualityCsvRow {
+  brand: string;
+  classification_pct: string | number;
+  annotation_pct: string | number;
+  total_diagrams?: string | number;
+}
+
 export interface CsvRow {
   brand?: string;
   region?: string;
