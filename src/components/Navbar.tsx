@@ -5,9 +5,23 @@ import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import clsx from "clsx";
 
-const links = [
-  { href: "/", label: "Dashboard" },
-  { href: "/upload", label: "Upload Results" },
+const sections = [
+  {
+    href: "/coverage",
+    label: "Coverage",
+    match: (p: string) => p.startsWith("/coverage"),
+  },
+  {
+    href: "/accuracy",
+    label: "Accuracy",
+    match: (p: string) =>
+      p === "/accuracy" || p.startsWith("/brands") || p === "/upload",
+  },
+  {
+    href: "/quality",
+    label: "Quality",
+    match: (p: string) => p.startsWith("/quality"),
+  },
 ];
 
 export function Navbar() {
@@ -18,29 +32,29 @@ export function Navbar() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-grey-100 h-16">
       <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5">
+        <Link href="/accuracy" className="flex items-center gap-2.5">
           <div className="w-7 h-7 bg-brand-blue rounded-md flex items-center justify-center flex-shrink-0">
             <span className="text-white font-bold text-sm">P</span>
           </div>
           <span className="font-bold text-grey-950 text-sm">
-            MPN Accuracy
+            Interpreter Metrics
           </span>
         </Link>
 
         {/* Nav links */}
         <nav className="flex items-center gap-1">
-          {links.map((link) => (
+          {sections.map((section) => (
             <Link
-              key={link.href}
-              href={link.href}
+              key={section.href}
+              href={section.href}
               className={clsx(
                 "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
-                pathname === link.href
+                section.match(pathname)
                   ? "bg-brand-tint text-brand-blue"
                   : "text-grey-400 hover:text-grey-900 hover:bg-grey-50"
               )}
             >
-              {link.label}
+              {section.label}
             </Link>
           ))}
         </nav>

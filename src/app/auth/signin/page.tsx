@@ -18,13 +18,13 @@ export default function SignInPage() {
         <div className="bg-white border border-grey-100 rounded-xl shadow-sm p-8">
           <div className="h-1 bg-brand-blue rounded-t-xl -mt-8 -mx-8 mb-8 rounded-tl-xl rounded-tr-xl" />
           <h1 className="text-grey-950 font-bold text-xl mb-1">
-            MPN Accuracy Benchmarking
+            Interpreter Metrics
           </h1>
           <p className="text-grey-400 text-sm mb-8">
             Sign in with your Partly Google account to continue.
           </p>
           <button
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn("google", { callbackUrl: "/accuracy" })}
             className="w-full flex items-center justify-center gap-3 bg-brand-blue hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors text-sm"
           >
             <GoogleIcon />

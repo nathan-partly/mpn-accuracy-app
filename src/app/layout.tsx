@@ -6,8 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "MPN Accuracy | Partly",
-  description: "Interpreter accuracy benchmarking dashboard",
+  title: "Interpreter Metrics | Partly",
+  description: "VIN coverage, accuracy and quality metrics for the Partly interpreter",
 };
 
 export default async function RootLayout({
