@@ -48,13 +48,13 @@ function MarketPills({ brand }: { brand: QualityBrandData }) {
     { label: "UK", value: brand.vio_uk_pct },
     { label: "AU", value: brand.vio_au_pct },
     { label: "US", value: brand.vio_us_pct },
-  ].filter((m) => m.value != null && m.value > 0);
+  ].filter((m) => m.value != null && Number(m.value) > 0);
   if (markets.length === 0) return <span className="text-grey-300 text-xs">—</span>;
   return (
     <div className="flex flex-wrap gap-1">
       {markets.map((m) => (
         <span key={m.label} className="text-xs text-grey-500 bg-grey-50 border border-grey-100 px-1.5 py-0.5 rounded tabular-nums">
-          {m.label} {m.value!.toFixed(1)}%
+          {m.label} {Number(m.value).toFixed(1)}%
         </span>
       ))}
     </div>
