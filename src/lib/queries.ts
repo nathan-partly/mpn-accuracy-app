@@ -562,7 +562,7 @@ export async function getQualityTrendForTopBrands(): Promise<{ brand: string; po
     LIMIT 10
   `;
 
-  const brands = topBrands.map((r: { brand: string }) => r.brand);
+  const brands = topBrands.map((r) => r.brand as string);
   const result: { brand: string; points: QualityTrendPoint[] }[] = [];
 
   for (const brand of brands) {
