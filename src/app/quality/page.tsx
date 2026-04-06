@@ -37,45 +37,36 @@ function CoverageBar({ value, threshold }: { value: number | null; threshold: nu
   );
 }
 
-/** Small dot indicator for a quality gate. Shows label on hover. */
-function GateDot({ met, title }: { met: boolean; title: string }) {
+/** Single labeled checkbox for a quality gate */
+function GateCheck({ met, label }: { met: boolean; label: string }) {
   return (
-    <span
-      title={title}
-      className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${met ? "bg-emerald-500" : "bg-grey-200"}`}
-    />
+    <span className="inline-flex items-center gap-1">
+      {met ? (
+        <svg className="w-3 h-3 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      ) : (
+        <svg className="w-3 h-3 text-grey-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      )}
+      <span className={`text-xs ${met ? "text-grey-700" : "text-grey-400"}`}>{label}</span>
+    </span>
   );
 }
 
-/** Compact 3 L1 dots | 7 L2 dots — hover each for gate label */
+/** 2×2 grid of the 4 manual quality gates */
 function QualityGates({ brand }: { brand: QualityBrandData }) {
-  const cls = Number(brand.classification_pct ?? 0);
-  const ann = Number(brand.annotation_pct ?? 0);
-
-  const l1 = [
-    { met: cls >= 20, title: "≥20% classified (L1)" },
-    { met: ann >= 20, title: "≥20% annotated (L1)" },
-    { met: !!brand.req_diagram_style, title: "Diagram style (L1)" },
-  ];
-  const l2 = [
-    { met: cls >= 80, title: "≥80% classified (L2)" },
-    { met: ann >= 80, title: "≥80% annotated (L2)" },
-    { met: !!brand.req_diagram_cleanup, title: "Diagram cleanup (L2)" },
-    { met: !!brand.req_titles_rephrased, title: "Titles rephrased (L2)" },
-    { met: !!brand.req_irrelevant_removed, title: "Irrelevant removed (L2)" },
-    { met: !!brand.req_accuracy_verified, title: "Accuracy verified (L2)" },
-    { met: !!brand.req_part_variant_l2, title: "Part variant ≥ OEM (L2)" },
+  const gates = [
+    { met: !!brand.req_diagram_cleanup,   label: "Diagram cleanup" },
+    { met: !!brand.req_titles_rephrased,  label: "Titles rephrased" },
+    { met: !!brand.req_irrelevant_removed, label: "Irrelevant removed" },
+    { met: !!brand.req_part_variant_l2,   label: "Part variant ≥ OEM" },
   ];
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-0.5">
-        {l1.map((g, i) => <GateDot key={i} met={g.met} title={g.title} />)}
-      </div>
-      <div className="w-px h-3 bg-grey-200 flex-shrink-0" />
-      <div className="flex items-center gap-0.5">
-        {l2.map((g, i) => <GateDot key={i} met={g.met} title={g.title} />)}
-      </div>
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+      {gates.map((g, i) => <GateCheck key={i} met={g.met} label={g.label} />)}
     </div>
   );
 }
@@ -183,7 +174,7 @@ export default async function QualityPage() {
           <span className="flex items-center gap-1.5"><span className="font-bold text-brand-blue">L2</span>≥80% classification + ≥80% annotation + all quality gates</span>
           <span className="flex items-center gap-1.5"><span className="font-bold text-emerald-700">L1</span>≥20% classification + ≥20% annotation + diagram style</span>
           <span className="flex items-center gap-1.5"><span className="font-bold text-amber-600">L0</span>Below L1 threshold</span>
-          <span className="ml-auto text-grey-400">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US · Hover dots for gate details</span>
+          <span className="ml-auto text-grey-400">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US</span>
         </div>
       </div>
 
