@@ -14,6 +14,16 @@ interface ParsedRow {
   classification_pct: number | null;
   annotation_pct: number | null;
   total_diagrams: number | null;
+  req_diagram_style: boolean;
+  req_diagram_cleanup: boolean;
+  req_titles_rephrased: boolean;
+  req_irrelevant_removed: boolean;
+  req_accuracy_verified: boolean;
+  req_part_variant_l2: boolean;
+}
+
+function parseBool(v: string | undefined): boolean {
+  return String(v ?? "").toLowerCase().trim() === "true";
 }
 
 export default function QualityUploadPage() {
@@ -68,6 +78,12 @@ export default function QualityUploadPage() {
               r.total_diagrams != null && r.total_diagrams !== ""
                 ? parseInt(String(r.total_diagrams), 10)
                 : null,
+            req_diagram_style: parseBool((r as Record<string, string>).req_diagram_style),
+            req_diagram_cleanup: parseBool((r as Record<string, string>).req_diagram_cleanup),
+            req_titles_rephrased: parseBool((r as Record<string, string>).req_titles_rephrased),
+            req_irrelevant_removed: parseBool((r as Record<string, string>).req_irrelevant_removed),
+            req_accuracy_verified: parseBool((r as Record<string, string>).req_accuracy_verified),
+            req_part_variant_l2: parseBool((r as Record<string, string>).req_part_variant_l2),
           }));
 
         if (parsed.length === 0) {
@@ -136,6 +152,11 @@ export default function QualityUploadPage() {
   const fmt = (v: number | null) =>
     v == null ? <span className="text-grey-300">—</span> : `${v.toFixed(2)}%`;
 
+  const gatesCount = (r: ParsedRow) =>
+    [r.req_diagram_style, r.req_diagram_cleanup, r.req_titles_rephrased,
+     r.req_irrelevant_removed, r.req_accuracy_verified, r.req_part_variant_l2]
+      .filter(Boolean).length;
+
   const isUploading = (state as string) === "uploading";
 
   if (state === "success") {
@@ -175,7 +196,7 @@ export default function QualityUploadPage() {
         <p className="text-xs font-semibold text-brand-blue uppercase tracking-widest mb-1">Quality</p>
         <h1 className="text-2xl font-bold text-grey-950">Upload Quality Snapshot</h1>
         <p className="text-grey-400 text-sm mt-1">
-          Upload a CSV of classification and annotation coverage to record a new snapshot.{" "}
+          Upload a CSV with coverage percentages and quality gate flags.{" "}
           <a href="/quality-template.csv" download className="text-brand-blue hover:underline font-medium">
             Download CSV template
           </a>
@@ -229,7 +250,9 @@ export default function QualityUploadPage() {
           <p className="text-sm font-semibold text-grey-950 mb-1">
             {state === "parsing" ? "Parsing…" : "Drop your CSV here, or click to browse"}
           </p>
-          <p className="text-xs text-grey-400">Required columns: brand, classification_pct, annotation_pct</p>
+          <p className="text-xs text-grey-400">
+            Required: brand, classification_pct, annotation_pct · Optional: total_diagrams, req_* gates (true/false)
+          </p>
         </div>
       )}
 
@@ -266,13 +289,15 @@ export default function QualityUploadPage() {
                     <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Classification</th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Annotation</th>
-                    <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Total Diagrams</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Diagrams</th>
                     <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
+                    <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Gates</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r, i) => {
                     const lv = levelFor(r.classification_pct, r.annotation_pct);
+                    const gc = gatesCount(r);
                     return (
                       <tr key={i} className={i !== rows.length - 1 ? "border-b border-grey-100" : ""}>
                         <td className="px-5 py-3 font-semibold text-grey-950">{r.brand}</td>
@@ -282,6 +307,13 @@ export default function QualityUploadPage() {
                           {r.total_diagrams != null ? r.total_diagrams.toLocaleString() : <span className="text-grey-300">—</span>}
                         </td>
                         <td className={`px-5 py-3 text-right font-bold ${lv.color}`}>{lv.label}</td>
+                        <td className="px-5 py-3 text-right">
+                          {gc > 0 ? (
+                            <span className="text-xs font-semibold text-emerald-700">{gc}/6</span>
+                          ) : (
+                            <span className="text-xs text-grey-300">0/6</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}

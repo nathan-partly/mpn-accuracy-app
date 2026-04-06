@@ -30,6 +30,12 @@ export async function POST(req: NextRequest) {
       classification_pct?: string | number;
       annotation_pct?: string | number;
       total_diagrams?: string | number;
+      req_diagram_style?: boolean;
+      req_diagram_cleanup?: boolean;
+      req_titles_rephrased?: boolean;
+      req_irrelevant_removed?: boolean;
+      req_accuracy_verified?: boolean;
+      req_part_variant_l2?: boolean;
     }) => ({
       brand: r.brand.trim().toUpperCase(),
       classification_pct: r.classification_pct != null && r.classification_pct !== ""
@@ -41,6 +47,12 @@ export async function POST(req: NextRequest) {
       total_diagrams: r.total_diagrams != null && r.total_diagrams !== ""
         ? parseInt(String(r.total_diagrams), 10)
         : null,
+      req_diagram_style: !!r.req_diagram_style,
+      req_diagram_cleanup: !!r.req_diagram_cleanup,
+      req_titles_rephrased: !!r.req_titles_rephrased,
+      req_irrelevant_removed: !!r.req_irrelevant_removed,
+      req_accuracy_verified: !!r.req_accuracy_verified,
+      req_part_variant_l2: !!r.req_part_variant_l2,
     }));
 
   if (validated.length === 0) {

@@ -125,6 +125,7 @@ export default async function DashboardPage() {
             Pending Benchmarking
           </h2>
           <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
+            <div className="h-1 bg-brand-blue" />
             <table className="w-full text-sm">
               <tbody>
                 {pending.map((brand, i) => (

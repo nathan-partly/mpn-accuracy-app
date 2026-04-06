@@ -577,7 +577,18 @@ export async function getQualityTrendForTopBrands(): Promise<{ brand: string; po
 
 export async function createQualitySnapshot(
   snapshotDate: string,
-  rows: { brand: string; classification_pct: number | null; annotation_pct: number | null; total_diagrams: number | null }[],
+  rows: {
+    brand: string;
+    classification_pct: number | null;
+    annotation_pct: number | null;
+    total_diagrams: number | null;
+    req_diagram_style?: boolean;
+    req_diagram_cleanup?: boolean;
+    req_titles_rephrased?: boolean;
+    req_irrelevant_removed?: boolean;
+    req_accuracy_verified?: boolean;
+    req_part_variant_l2?: boolean;
+  }[],
   uploadedBy?: string,
   notes?: string
 ): Promise<number> {
@@ -590,18 +601,34 @@ export async function createQualitySnapshot(
 
   for (const row of rows) {
     await sql`
-      INSERT INTO quality_brand_data (snapshot_id, brand, classification_pct, annotation_pct, total_diagrams)
+      INSERT INTO quality_brand_data (
+        snapshot_id, brand, classification_pct, annotation_pct, total_diagrams,
+        req_diagram_style, req_diagram_cleanup, req_titles_rephrased,
+        req_irrelevant_removed, req_accuracy_verified, req_part_variant_l2
+      )
       VALUES (
         ${snapshotId},
         ${row.brand},
         ${row.classification_pct},
         ${row.annotation_pct},
-        ${row.total_diagrams}
+        ${row.total_diagrams},
+        ${row.req_diagram_style ?? false},
+        ${row.req_diagram_cleanup ?? false},
+        ${row.req_titles_rephrased ?? false},
+        ${row.req_irrelevant_removed ?? false},
+        ${row.req_accuracy_verified ?? false},
+        ${row.req_part_variant_l2 ?? false}
       )
       ON CONFLICT (snapshot_id, brand) DO UPDATE SET
-        classification_pct = EXCLUDED.classification_pct,
-        annotation_pct     = EXCLUDED.annotation_pct,
-        total_diagrams     = EXCLUDED.total_diagrams
+        classification_pct    = EXCLUDED.classification_pct,
+        annotation_pct        = EXCLUDED.annotation_pct,
+        total_diagrams        = EXCLUDED.total_diagrams,
+        req_diagram_style     = EXCLUDED.req_diagram_style,
+        req_diagram_cleanup   = EXCLUDED.req_diagram_cleanup,
+        req_titles_rephrased  = EXCLUDED.req_titles_rephrased,
+        req_irrelevant_removed = EXCLUDED.req_irrelevant_removed,
+        req_accuracy_verified = EXCLUDED.req_accuracy_verified,
+        req_part_variant_l2   = EXCLUDED.req_part_variant_l2
     `;
   }
   return snapshotId;

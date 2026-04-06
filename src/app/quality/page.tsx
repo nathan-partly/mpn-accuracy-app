@@ -37,54 +37,46 @@ function CoverageBar({ value, threshold }: { value: number | null; threshold: nu
   );
 }
 
-function Checkbox({ met, label }: { met: boolean; label: string }) {
+/** Small dot indicator for a quality gate. Shows label on hover. */
+function GateDot({ met, title }: { met: boolean; title: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs">
-      {met ? (
-        <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-        </svg>
-      ) : (
-        <svg className="w-3.5 h-3.5 text-grey-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <circle cx="12" cy="12" r="9" />
-        </svg>
-      )}
-      <span className={met ? "text-grey-600" : "text-grey-400"}>{label}</span>
-    </span>
+    <span
+      title={title}
+      className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${met ? "bg-emerald-500" : "bg-grey-200"}`}
+    />
   );
 }
 
-function RequirementsRow({ brand }: { brand: QualityBrandData }) {
+/** Compact 3 L1 dots | 7 L2 dots — hover each for gate label */
+function QualityGates({ brand }: { brand: QualityBrandData }) {
   const cls = Number(brand.classification_pct ?? 0);
   const ann = Number(brand.annotation_pct ?? 0);
 
-  const l1Reqs = [
-    { met: cls >= 20, label: "≥20% classified" },
-    { met: ann >= 20, label: "≥20% annotated" },
-    { met: !!brand.req_diagram_style, label: "Diagram style" },
+  const l1 = [
+    { met: cls >= 20, title: "≥20% classified (L1)" },
+    { met: ann >= 20, title: "≥20% annotated (L1)" },
+    { met: !!brand.req_diagram_style, title: "Diagram style (L1)" },
   ];
-  const l2Reqs = [
-    { met: cls >= 80, label: "≥80% classified" },
-    { met: ann >= 80, label: "≥80% annotated" },
-    { met: !!brand.req_diagram_cleanup, label: "Diagram cleanup" },
-    { met: !!brand.req_titles_rephrased, label: "Titles rephrased" },
-    { met: !!brand.req_irrelevant_removed, label: "Irrelevant removed" },
-    { met: !!brand.req_accuracy_verified, label: "Accuracy verified" },
-    { met: !!brand.req_part_variant_l2, label: "Part variant ≥ OEM" },
+  const l2 = [
+    { met: cls >= 80, title: "≥80% classified (L2)" },
+    { met: ann >= 80, title: "≥80% annotated (L2)" },
+    { met: !!brand.req_diagram_cleanup, title: "Diagram cleanup (L2)" },
+    { met: !!brand.req_titles_rephrased, title: "Titles rephrased (L2)" },
+    { met: !!brand.req_irrelevant_removed, title: "Irrelevant removed (L2)" },
+    { met: !!brand.req_accuracy_verified, title: "Accuracy verified (L2)" },
+    { met: !!brand.req_part_variant_l2, title: "Part variant ≥ OEM (L2)" },
   ];
 
   return (
-    <tr className="border-b border-grey-100 bg-grey-50/50">
-      <td colSpan={7} className="px-4 pb-3 pt-1">
-        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-          <span className="text-xs font-semibold text-grey-400 uppercase tracking-widest self-center">L1</span>
-          {l1Reqs.map((r) => <Checkbox key={r.label} met={r.met} label={r.label} />)}
-          <span className="text-grey-200 self-center">|</span>
-          <span className="text-xs font-semibold text-grey-400 uppercase tracking-widest self-center">L2</span>
-          {l2Reqs.map((r) => <Checkbox key={r.label} met={r.met} label={r.label} />)}
-        </div>
-      </td>
-    </tr>
+    <div className="flex items-center gap-2">
+      <div className="flex items-center gap-0.5">
+        {l1.map((g, i) => <GateDot key={i} met={g.met} title={g.title} />)}
+      </div>
+      <div className="w-px h-3 bg-grey-200 flex-shrink-0" />
+      <div className="flex items-center gap-0.5">
+        {l2.map((g, i) => <GateDot key={i} met={g.met} title={g.title} />)}
+      </div>
+    </div>
   );
 }
 
@@ -151,7 +143,6 @@ export default async function QualityPage() {
   const l0 = brands.filter((b) => b.level === "L0");
   const unsupported = brands.filter((b) => b.level === "Unsupported");
 
-  // Sort globally by VIO rank (not grouped by level)
   const sorted = [...brands].sort((a, b) => (a.vio_rank ?? 999) - (b.vio_rank ?? 999));
 
   return (
@@ -192,7 +183,7 @@ export default async function QualityPage() {
           <span className="flex items-center gap-1.5"><span className="font-bold text-brand-blue">L2</span>≥80% classification + ≥80% annotation + all quality gates</span>
           <span className="flex items-center gap-1.5"><span className="font-bold text-emerald-700">L1</span>≥20% classification + ≥20% annotation + diagram style</span>
           <span className="flex items-center gap-1.5"><span className="font-bold text-amber-600">L0</span>Below L1 threshold</span>
-          <span className="ml-auto text-grey-400">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US</span>
+          <span className="ml-auto text-grey-400">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US · Hover dots for gate details</span>
         </div>
       </div>
 
@@ -206,43 +197,44 @@ export default async function QualityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-grey-100">
-                <th className="text-center px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO Rank</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO %</th>
-                <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
-                <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Classification</th>
-                <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Annotation</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
+                <th className="text-center px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO Rank</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO %</th>
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Classification</th>
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Annotation</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Gates</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((brand, i) => (
-                <>
-                  <tr key={brand.id} className="border-b border-grey-50">
-                    <td className="px-4 py-3 text-grey-400 text-xs tabular-nums text-center">
-                      {brand.vio_rank ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-grey-950">{brand.brand}</td>
-                    <td className="px-4 py-3 text-right text-grey-700 tabular-nums font-medium">
-                      {brand.vio_combined_pct != null
-                        ? `${(Number(brand.vio_combined_pct) / 4).toFixed(2)}%`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <MarketPills brand={brand} />
-                    </td>
-                    <td className="px-4 py-3" style={{ minWidth: 150 }}>
-                      <CoverageBar value={brand.classification_pct} threshold={80} />
-                    </td>
-                    <td className="px-4 py-3" style={{ minWidth: 150 }}>
-                      <CoverageBar value={brand.annotation_pct} threshold={80} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <LevelBadge level={brand.level} />
-                    </td>
-                  </tr>
-                  <RequirementsRow key={`req-${brand.id}`} brand={brand} />
-                </>
+              {sorted.map((brand) => (
+                <tr key={brand.id} className="border-b border-grey-50 hover:bg-grey-50 transition-colors">
+                  <td className="px-5 py-3.5 text-grey-400 text-xs tabular-nums text-center">
+                    {brand.vio_rank ?? "—"}
+                  </td>
+                  <td className="px-5 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
+                  <td className="px-5 py-3.5 text-right text-grey-700 tabular-nums font-medium">
+                    {brand.vio_combined_pct != null
+                      ? `${(Number(brand.vio_combined_pct) / 4).toFixed(2)}%`
+                      : "—"}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <MarketPills brand={brand} />
+                  </td>
+                  <td className="px-5 py-3.5" style={{ minWidth: 150 }}>
+                    <CoverageBar value={brand.classification_pct} threshold={80} />
+                  </td>
+                  <td className="px-5 py-3.5" style={{ minWidth: 150 }}>
+                    <CoverageBar value={brand.annotation_pct} threshold={80} />
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <LevelBadge level={brand.level} />
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <QualityGates brand={brand} />
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -254,6 +246,7 @@ export default async function QualityPage() {
         <section className="mt-8">
           <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">Snapshot History</h2>
           <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
+            <div className="h-1 bg-brand-blue" />
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-grey-100">
