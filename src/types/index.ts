@@ -160,6 +160,12 @@ export interface QualityCsvRow {
   classification_pct: string | number;
   annotation_pct: string | number;
   total_diagrams?: string | number;
+  req_diagram_style?: string;
+  req_diagram_cleanup?: string;
+  req_titles_rephrased?: string;
+  req_irrelevant_removed?: string;
+  req_accuracy_verified?: string;
+  req_part_variant_l2?: string;
 }
 
 export interface CsvRow {

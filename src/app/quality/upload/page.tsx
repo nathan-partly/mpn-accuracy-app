@@ -78,12 +78,12 @@ export default function QualityUploadPage() {
               r.total_diagrams != null && r.total_diagrams !== ""
                 ? parseInt(String(r.total_diagrams), 10)
                 : null,
-            req_diagram_style: parseBool((r as Record<string, string>).req_diagram_style),
-            req_diagram_cleanup: parseBool((r as Record<string, string>).req_diagram_cleanup),
-            req_titles_rephrased: parseBool((r as Record<string, string>).req_titles_rephrased),
-            req_irrelevant_removed: parseBool((r as Record<string, string>).req_irrelevant_removed),
-            req_accuracy_verified: parseBool((r as Record<string, string>).req_accuracy_verified),
-            req_part_variant_l2: parseBool((r as Record<string, string>).req_part_variant_l2),
+            req_diagram_style: parseBool(r.req_diagram_style),
+            req_diagram_cleanup: parseBool(r.req_diagram_cleanup),
+            req_titles_rephrased: parseBool(r.req_titles_rephrased),
+            req_irrelevant_removed: parseBool(r.req_irrelevant_removed),
+            req_accuracy_verified: parseBool(r.req_accuracy_verified),
+            req_part_variant_l2: parseBool(r.req_part_variant_l2),
           }));
 
         if (parsed.length === 0) {
