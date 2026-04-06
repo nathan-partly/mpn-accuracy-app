@@ -10,14 +10,14 @@ const sections = [
     href: "/coverage",
     label: "Coverage",
     match: (p: string) => p.startsWith("/coverage"),
-    upload: null,
+    upload: { href: "/coverage/upload", label: "New Snapshot" },
   },
   {
     href: "/accuracy",
     label: "Accuracy",
     match: (p: string) =>
       p === "/accuracy" || p.startsWith("/brands") || p === "/upload",
-    upload: { href: "/upload", label: "Upload Results" },
+    upload: { href: "/upload", label: "New Snapshot" },
   },
   {
     href: "/quality",

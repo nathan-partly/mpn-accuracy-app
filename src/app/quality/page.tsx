@@ -193,8 +193,8 @@ export default async function QualityPage() {
                 <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO %</th>
                 <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
                 <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 200 }}>Coverage</th>
-                <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
                 <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 160 }}>Gates</th>
+                <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
               </tr>
             </thead>
             <tbody>
@@ -224,11 +224,11 @@ export default async function QualityPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <LevelBadge level={brand.level} />
-                  </td>
                   <td className="px-5 py-3.5">
                     <QualityGates brand={brand} />
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <LevelBadge level={brand.level} />
                   </td>
                 </tr>
               ))}

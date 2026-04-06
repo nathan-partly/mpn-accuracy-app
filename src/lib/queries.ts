@@ -631,5 +631,31 @@ export async function createQualitySnapshot(
         req_part_variant_l2   = EXCLUDED.req_part_variant_l2
     `;
   }
+
+  // Carry forward VIO data from the most recent previous snapshot for each brand
+  // where VIO columns are still NULL (i.e. not provided in this upload).
+  // VIO market share data changes infrequently so this avoids losing it every upload.
+  await sql`
+    UPDATE quality_brand_data qbd
+    SET
+      vio_rank         = prev.vio_rank,
+      vio_combined_pct = prev.vio_combined_pct,
+      vio_nz_pct       = prev.vio_nz_pct,
+      vio_uk_pct       = prev.vio_uk_pct,
+      vio_au_pct       = prev.vio_au_pct,
+      vio_us_pct       = prev.vio_us_pct
+    FROM (
+      SELECT DISTINCT ON (brand)
+        brand, vio_rank, vio_combined_pct, vio_nz_pct, vio_uk_pct, vio_au_pct, vio_us_pct
+      FROM quality_brand_data
+      WHERE snapshot_id != ${snapshotId}
+        AND vio_rank IS NOT NULL
+      ORDER BY brand, snapshot_id DESC
+    ) prev
+    WHERE qbd.snapshot_id = ${snapshotId}
+      AND qbd.brand = prev.brand
+      AND qbd.vio_rank IS NULL
+  `;
+
   return snapshotId;
 }

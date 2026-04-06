@@ -251,7 +251,7 @@ export default function QualityUploadPage() {
             {state === "parsing" ? "Parsing…" : "Drop your CSV here, or click to browse"}
           </p>
           <p className="text-xs text-grey-400">
-            Required: brand, classification_pct, annotation_pct · Optional: total_diagrams, req_* gates (true/false)
+            Required: brand, classification_pct, annotation_pct · Optional: total_diagrams, req_diagram_cleanup, req_titles_rephrased, req_irrelevant_removed, req_part_variant_l2
           </p>
         </div>
       )}
