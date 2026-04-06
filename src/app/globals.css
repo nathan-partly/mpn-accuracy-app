@@ -7,6 +7,13 @@
   --brand-blue: #3632ff;
 }
 
+html {
+  /* Reserve scrollbar gutter at all times — prevents layout shift when
+     switching between scrollable pages (Accuracy/Quality) and non-scrollable
+     pages (Coverage iframe). Works on all modern browsers; no-op elsewhere. */
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: "Inter", sans-serif;
   background-color: #f4f4f6;
