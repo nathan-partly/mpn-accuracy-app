@@ -11,20 +11,15 @@ export const metadata = {
 
 export const revalidate = 60;
 
-function vioPct(v: number | null) {
-  if (v == null) return "—";
-  return `${Number(v).toFixed(2)}%`;
-}
-
 function CoverageBar({ value, threshold }: { value: number | null; threshold: number }) {
   if (value == null) return <span className="text-grey-300 text-xs">—</span>;
-  const pctVal = Math.min(100, value);
-  const reached = value >= threshold;
+  const pctVal = Math.min(100, Number(value));
+  const reached = pctVal >= threshold;
   const barColor = reached
     ? "bg-brand-blue"
-    : value >= threshold * 0.5
+    : pctVal >= threshold * 0.5
     ? "bg-amber-400"
-    : value > 0
+    : pctVal > 0
     ? "bg-grey-400"
     : "bg-grey-200";
   return (
@@ -39,6 +34,57 @@ function CoverageBar({ value, threshold }: { value: number | null; threshold: nu
         {pctVal.toFixed(1)}%
       </span>
     </div>
+  );
+}
+
+function Checkbox({ met, label }: { met: boolean; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-xs">
+      {met ? (
+        <svg className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5 text-grey-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      )}
+      <span className={met ? "text-grey-600" : "text-grey-400"}>{label}</span>
+    </span>
+  );
+}
+
+function RequirementsRow({ brand }: { brand: QualityBrandData }) {
+  const cls = Number(brand.classification_pct ?? 0);
+  const ann = Number(brand.annotation_pct ?? 0);
+
+  const l1Reqs = [
+    { met: cls >= 20, label: "≥20% classified" },
+    { met: ann >= 20, label: "≥20% annotated" },
+    { met: !!brand.req_diagram_style, label: "Diagram style" },
+  ];
+  const l2Reqs = [
+    { met: cls >= 80, label: "≥80% classified" },
+    { met: ann >= 80, label: "≥80% annotated" },
+    { met: !!brand.req_diagram_cleanup, label: "Diagram cleanup" },
+    { met: !!brand.req_titles_rephrased, label: "Titles rephrased" },
+    { met: !!brand.req_irrelevant_removed, label: "Irrelevant removed" },
+    { met: !!brand.req_accuracy_verified, label: "Accuracy verified" },
+    { met: !!brand.req_part_variant_l2, label: "Part variant ≥ OEM" },
+  ];
+
+  return (
+    <tr className="border-b border-grey-100 bg-grey-50/50">
+      <td colSpan={7} className="px-4 pb-3 pt-1">
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          <span className="text-xs font-semibold text-grey-400 uppercase tracking-widest self-center">L1</span>
+          {l1Reqs.map((r) => <Checkbox key={r.label} met={r.met} label={r.label} />)}
+          <span className="text-grey-200 self-center">|</span>
+          <span className="text-xs font-semibold text-grey-400 uppercase tracking-widest self-center">L2</span>
+          {l2Reqs.map((r) => <Checkbox key={r.label} met={r.met} label={r.label} />)}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -89,10 +135,7 @@ export default async function QualityPage() {
             <p className="text-sm text-grey-400 max-w-sm mb-6">
               Upload your first quality snapshot to start tracking classification and annotation coverage over time.
             </p>
-            <Link
-              href="/quality/upload"
-              className="px-4 py-2 bg-brand-blue text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
-            >
+            <Link href="/quality/upload" className="px-4 py-2 bg-brand-blue text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors">
               Upload first snapshot
             </Link>
           </div>
@@ -108,16 +151,8 @@ export default async function QualityPage() {
   const l0 = brands.filter((b) => b.level === "L0");
   const unsupported = brands.filter((b) => b.level === "Unsupported");
 
-  // Sort by VIO rank within each level group
-  const sortByVio = (arr: QualityBrandData[]) =>
-    [...arr].sort((a, b) => (a.vio_rank ?? 999) - (b.vio_rank ?? 999));
-
-  const grouped: QualityBrandData[] = [
-    ...sortByVio(l2),
-    ...sortByVio(l1),
-    ...sortByVio(l0),
-    ...sortByVio(unsupported),
-  ];
+  // Sort globally by VIO rank (not grouped by level)
+  const sorted = [...brands].sort((a, b) => (a.vio_rank ?? 999) - (b.vio_rank ?? 999));
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -142,50 +177,22 @@ export default async function QualityPage() {
         </Link>
       </div>
 
-      {/* KPI cards — 4 level counts only */}
+      {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <KpiCard
-          label="Level 2 Brands"
-          value={l2.length}
-          sub="≥80% classification & annotation"
-          highlight
-        />
-        <KpiCard
-          label="Level 1 Brands"
-          value={l1.length}
-          sub="≥20% classification & annotation"
-        />
-        <KpiCard
-          label="Level 0 Brands"
-          value={l0.length}
-          sub="Below L1 threshold"
-        />
-        <KpiCard
-          label="Unsupported"
-          value={unsupported.length}
-          sub="No EPC data"
-        />
+        <KpiCard label="Level 2 Brands" value={l2.length} sub="≥80% classification & annotation" highlight />
+        <KpiCard label="Level 1 Brands" value={l1.length} sub="≥20% classification & annotation" />
+        <KpiCard label="Level 0 Brands" value={l0.length} sub="Below L1 threshold" />
+        <KpiCard label="Unsupported" value={unsupported.length} sub="No EPC data" />
       </div>
 
       {/* Level thresholds legend */}
       <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
         <div className="h-1 bg-brand-blue" />
         <div className="px-5 py-4 flex flex-wrap gap-6 text-xs text-grey-500">
-          <span className="flex items-center gap-1.5">
-            <span className="font-bold text-brand-blue">L2</span>
-            ≥80% classification + ≥80% annotation
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="font-bold text-emerald-700">L1</span>
-            ≥20% classification + ≥20% annotation
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="font-bold text-amber-600">L0</span>
-            Below L1 threshold
-          </span>
-          <span className="ml-auto text-grey-400">
-            Ranked by VIO market share · bars show progress toward L2 (80%)
-          </span>
+          <span className="flex items-center gap-1.5"><span className="font-bold text-brand-blue">L2</span>≥80% classification + ≥80% annotation + all quality gates</span>
+          <span className="flex items-center gap-1.5"><span className="font-bold text-emerald-700">L1</span>≥20% classification + ≥20% annotation + diagram style</span>
+          <span className="flex items-center gap-1.5"><span className="font-bold text-amber-600">L0</span>Below L1 threshold</span>
+          <span className="ml-auto text-grey-400">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US</span>
         </div>
       </div>
 
@@ -199,7 +206,7 @@ export default async function QualityPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-grey-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO Rank</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO Rank</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO %</th>
                 <th className="px-4 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
@@ -209,28 +216,33 @@ export default async function QualityPage() {
               </tr>
             </thead>
             <tbody>
-              {grouped.map((brand, i) => (
-                <tr key={brand.id} className={i !== grouped.length - 1 ? "border-b border-grey-100" : ""}>
-                  <td className="px-4 py-3.5 text-grey-400 text-xs tabular-nums text-center">
-                    {brand.vio_rank ?? "—"}
-                  </td>
-                  <td className="px-4 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
-                  <td className="px-4 py-3.5 text-right text-grey-700 tabular-nums font-medium">
-                    {vioPct(brand.vio_combined_pct)}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <MarketPills brand={brand} />
-                  </td>
-                  <td className="px-4 py-3.5" style={{ minWidth: 150 }}>
-                    <CoverageBar value={brand.classification_pct} threshold={80} />
-                  </td>
-                  <td className="px-4 py-3.5" style={{ minWidth: 150 }}>
-                    <CoverageBar value={brand.annotation_pct} threshold={80} />
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <LevelBadge level={brand.level} />
-                  </td>
-                </tr>
+              {sorted.map((brand, i) => (
+                <>
+                  <tr key={brand.id} className="border-b border-grey-50">
+                    <td className="px-4 py-3 text-grey-400 text-xs tabular-nums text-center">
+                      {brand.vio_rank ?? "—"}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-grey-950">{brand.brand}</td>
+                    <td className="px-4 py-3 text-right text-grey-700 tabular-nums font-medium">
+                      {brand.vio_combined_pct != null
+                        ? `${(Number(brand.vio_combined_pct) / 4).toFixed(2)}%`
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <MarketPills brand={brand} />
+                    </td>
+                    <td className="px-4 py-3" style={{ minWidth: 150 }}>
+                      <CoverageBar value={brand.classification_pct} threshold={80} />
+                    </td>
+                    <td className="px-4 py-3" style={{ minWidth: 150 }}>
+                      <CoverageBar value={brand.annotation_pct} threshold={80} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <LevelBadge level={brand.level} />
+                    </td>
+                  </tr>
+                  <RequirementsRow key={`req-${brand.id}`} brand={brand} />
+                </>
               ))}
             </tbody>
           </table>
@@ -240,9 +252,7 @@ export default async function QualityPage() {
       {/* Previous snapshots */}
       {snapshots.length > 1 && (
         <section className="mt-8">
-          <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">
-            Snapshot History
-          </h2>
+          <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">Snapshot History</h2>
           <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
             <table className="w-full text-sm">
               <thead>
@@ -259,9 +269,7 @@ export default async function QualityPage() {
                     <td className="px-5 py-3.5 font-semibold text-grey-950">
                       {formatDate(s.snapshot_date)}
                       {i === 0 && (
-                        <span className="ml-2 text-xs font-semibold text-brand-blue bg-brand-tint px-1.5 py-0.5 rounded">
-                          Latest
-                        </span>
+                        <span className="ml-2 text-xs font-semibold text-brand-blue bg-brand-tint px-1.5 py-0.5 rounded">Latest</span>
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-right text-grey-900">{s.brand_count}</td>

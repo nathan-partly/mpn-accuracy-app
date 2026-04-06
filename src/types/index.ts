@@ -139,6 +139,12 @@ export interface QualityBrandData {
   vio_uk_pct: number | null;
   vio_au_pct: number | null;
   vio_us_pct: number | null;
+  req_diagram_style: boolean | null;
+  req_diagram_cleanup: boolean | null;
+  req_titles_rephrased: boolean | null;
+  req_irrelevant_removed: boolean | null;
+  req_accuracy_verified: boolean | null;
+  req_part_variant_l2: boolean | null;
   level: BrandLevel;  // computed
 }
 

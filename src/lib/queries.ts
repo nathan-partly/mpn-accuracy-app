@@ -523,7 +523,9 @@ export async function getLatestQualitySnapshot(): Promise<{ snapshot: QualitySna
 
   const rows = await sql`
     SELECT id, snapshot_id, brand, classification_pct, annotation_pct, total_diagrams,
-           vio_rank, vio_combined_pct, vio_nz_pct, vio_uk_pct, vio_au_pct, vio_us_pct
+           vio_rank, vio_combined_pct, vio_nz_pct, vio_uk_pct, vio_au_pct, vio_us_pct,
+           req_diagram_style, req_diagram_cleanup, req_titles_rephrased,
+           req_irrelevant_removed, req_accuracy_verified, req_part_variant_l2
     FROM quality_brand_data
     WHERE snapshot_id = ${snapshot.id}
     ORDER BY vio_rank ASC NULLS LAST, total_diagrams DESC NULLS LAST, brand ASC
