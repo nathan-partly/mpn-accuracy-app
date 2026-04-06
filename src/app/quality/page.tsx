@@ -55,17 +55,17 @@ function GateCheck({ met, label }: { met: boolean; label: string }) {
   );
 }
 
-/** 2×2 grid of the 4 manual quality gates */
+/** Vertical stack of the 4 manual quality gates */
 function QualityGates({ brand }: { brand: QualityBrandData }) {
   const gates = [
-    { met: !!brand.req_diagram_cleanup,   label: "Diagram cleanup" },
-    { met: !!brand.req_titles_rephrased,  label: "Titles rephrased" },
+    { met: !!brand.req_diagram_cleanup,    label: "Diagram cleanup" },
+    { met: !!brand.req_titles_rephrased,   label: "Titles rephrased" },
     { met: !!brand.req_irrelevant_removed, label: "Irrelevant removed" },
-    { met: !!brand.req_part_variant_l2,   label: "Part variant ≥ OEM" },
+    { met: !!brand.req_part_variant_l2,    label: "Part variant ≥ OEM" },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+    <div className="flex flex-col gap-1.5">
       {gates.map((g, i) => <GateCheck key={i} met={g.met} label={g.label} />)}
     </div>
   );
@@ -192,10 +192,9 @@ export default async function QualityPage() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brand</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">VIO %</th>
                 <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
-                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Classification</th>
-                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 150 }}>Annotation</th>
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 200 }}>Coverage</th>
                 <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Level</th>
-                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Gates</th>
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest" style={{ minWidth: 160 }}>Gates</th>
               </tr>
             </thead>
             <tbody>
@@ -213,11 +212,17 @@ export default async function QualityPage() {
                   <td className="px-5 py-3.5">
                     <MarketPills brand={brand} />
                   </td>
-                  <td className="px-5 py-3.5" style={{ minWidth: 150 }}>
-                    <CoverageBar value={brand.classification_pct} threshold={80} />
-                  </td>
-                  <td className="px-5 py-3.5" style={{ minWidth: 150 }}>
-                    <CoverageBar value={brand.annotation_pct} threshold={80} />
+                  <td className="px-5 py-3.5" style={{ minWidth: 200 }}>
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <p className="text-xs text-grey-400 mb-1">Classified</p>
+                        <CoverageBar value={brand.classification_pct} threshold={80} />
+                      </div>
+                      <div>
+                        <p className="text-xs text-grey-400 mb-1">Annotated</p>
+                        <CoverageBar value={brand.annotation_pct} threshold={80} />
+                      </div>
+                    </div>
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <LevelBadge level={brand.level} />
