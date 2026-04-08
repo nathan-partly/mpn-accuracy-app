@@ -27,10 +27,11 @@ export default function CoveragePage() {
         </Link>
       </div>
 
-      {/* Coverage dashboard iframe fills remaining space */}
+      {/* Coverage dashboard iframe — served from /api/coverage-html.
+          DB upload takes precedence over the static fallback. */}
       <div className="flex-1 overflow-hidden">
         <iframe
-          src="/coverage-dashboard.html"
+          src="/api/coverage-html"
           style={{ width: "100%", height: "100%", border: "none" }}
           title="VIN Coverage Dashboard"
         />

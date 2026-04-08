@@ -717,3 +717,47 @@ export async function getAccuracySnapshotHistory(): Promise<BenchmarkSnapshot[]>
   `;
   return rows as BenchmarkSnapshot[];
 }
+
+// ─── Coverage snapshots (DB-backed HTML storage) ──────────────────────────────
+
+export interface CoverageSnapshot {
+  id: number;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+export async function saveCoverageSnapshot(
+  htmlContent: string,
+  uploadedBy?: string
+): Promise<number> {
+  const [row] = await sql`
+    INSERT INTO coverage_snapshots (html_content, uploaded_by)
+    VALUES (${htmlContent}, ${uploadedBy ?? null})
+    RETURNING id
+  `;
+  return row.id as number;
+}
+
+export async function getLatestCoverageSnapshot(): Promise<{
+  id: number;
+  html_content: string;
+  uploaded_by: string | null;
+  created_at: string;
+} | null> {
+  const rows = await sql`
+    SELECT id, html_content, uploaded_by, created_at
+    FROM coverage_snapshots
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  return (rows[0] as { id: number; html_content: string; uploaded_by: string | null; created_at: string }) ?? null;
+}
+
+export async function getAllCoverageSnapshots(): Promise<CoverageSnapshot[]> {
+  const rows = await sql`
+    SELECT id, uploaded_by, created_at
+    FROM coverage_snapshots
+    ORDER BY created_at DESC
+  `;
+  return rows as CoverageSnapshot[];
+}
