@@ -11,6 +11,7 @@ import type {
   QualitySnapshot,
   QualityBrandData,
   QualityTrendPoint,
+  QualityTrendRow,
   BrandLevel,
   GlobalProviderStat,
   SnapshotDiff,
@@ -32,7 +33,10 @@ export async function getAllBrands(): Promise<Brand[]> {
       s.total_parts        AS latest_total_parts,
       s.valid_count        AS latest_valid_count,
       s.invalid_count      AS latest_invalid_count,
-      COUNT(s2.id)         AS snapshot_count
+      COUNT(s2.id)         AS snapshot_count,
+      -- VIO data from latest quality snapshot, matched by brand name
+      vq.vio_rank          AS vio_rank,
+      vq.vio_combined_pct  AS vio_combined_pct
     FROM brands b
     LEFT JOIN LATERAL (
       SELECT *
@@ -42,9 +46,20 @@ export async function getAllBrands(): Promise<Brand[]> {
       LIMIT 1
     ) s ON true
     LEFT JOIN benchmark_snapshots s2 ON s2.brand_id = b.id
+    -- Join latest quality VIO data by brand name (case-insensitive)
+    LEFT JOIN LATERAL (
+      SELECT qb.vio_rank, qb.vio_combined_pct
+      FROM quality_brand_data qb
+      JOIN quality_snapshots qs ON qs.id = qb.snapshot_id
+      WHERE UPPER(qb.brand) = UPPER(b.name)
+        AND qb.vio_rank IS NOT NULL
+      ORDER BY qs.snapshot_date DESC
+      LIMIT 1
+    ) vq ON true
     GROUP BY b.id, b.name, b.status, b.created_at,
              s.snapshot_date, s.accuracy_pct, s.active_vins,
-             s.total_parts, s.valid_count, s.invalid_count
+             s.total_parts, s.valid_count, s.invalid_count,
+             vq.vio_rank, vq.vio_combined_pct
     ORDER BY b.name ASC
   `;
   return rows as Brand[];
@@ -658,4 +673,47 @@ export async function createQualitySnapshot(
   `;
 
   return snapshotId;
+}
+
+// ─── Quality trend (all brands across all snapshots) ─────────────────────────
+
+export async function getQualityTrendAllBrands(): Promise<QualityTrendRow[]> {
+  const rows = await sql`
+    SELECT
+      qs.snapshot_date::text AS snapshot_date,
+      qb.brand,
+      qb.classification_pct,
+      qb.annotation_pct
+    FROM quality_brand_data qb
+    JOIN quality_snapshots qs ON qs.id = qb.snapshot_id
+    ORDER BY qs.snapshot_date ASC, qb.brand ASC
+  `;
+  return rows as QualityTrendRow[];
+}
+
+// ─── Accuracy snapshot upload history ────────────────────────────────────────
+
+export async function getAccuracySnapshotHistory(): Promise<BenchmarkSnapshot[]> {
+  const rows = await sql`
+    SELECT
+      s.id,
+      s.brand_id,
+      b.name AS brand_name,
+      s.snapshot_date,
+      s.notes,
+      s.uploaded_by,
+      s.total_vins,
+      s.active_vins,
+      s.total_parts,
+      s.valid_count,
+      s.invalid_count,
+      s.skipped_count,
+      s.accuracy_pct,
+      s.created_at
+    FROM benchmark_snapshots s
+    JOIN brands b ON b.id = s.brand_id
+    ORDER BY s.created_at DESC
+    LIMIT 100
+  `;
+  return rows as BenchmarkSnapshot[];
 }

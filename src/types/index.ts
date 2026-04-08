@@ -11,6 +11,9 @@ export interface Brand {
   latest_valid_count?: number;
   latest_invalid_count?: number;
   snapshot_count?: number;
+  // VIO data joined from quality snapshots
+  vio_rank?: number | null;
+  vio_combined_pct?: number | null;
 }
 
 export interface BenchmarkSnapshot {
@@ -116,6 +119,14 @@ export interface ProviderAccuracyStat {
 // ─── Quality ─────────────────────────────────────────────────────────────────
 
 export type BrandLevel = "L2" | "L1" | "L0" | "Unsupported";
+
+/** One row from getQualityTrendAllBrands — every brand × snapshot combination */
+export interface QualityTrendRow {
+  snapshot_date: string;
+  brand: string;
+  classification_pct: number | null;
+  annotation_pct: number | null;
+}
 
 export interface QualitySnapshot {
   id: number;
