@@ -13,8 +13,10 @@ export function CoverageUploadClient() {
   const router = useRouter();
 
   function acceptFile(f: File) {
-    if (!f.name.endsWith(".html")) {
-      setError("Please select an .html file.");
+    const isCsv = f.name.endsWith(".csv");
+    const isHtml = f.name.endsWith(".html");
+    if (!isCsv && !isHtml) {
+      setError("Please select a .csv or .html file.");
       setState("error");
       return;
     }
@@ -119,7 +121,7 @@ export function CoverageUploadClient() {
         <input
           ref={inputRef}
           type="file"
-          accept=".html,text/html"
+          accept=".csv,.html,text/csv,text/html"
           className="hidden"
           onChange={onFileChange}
         />
@@ -142,9 +144,9 @@ export function CoverageUploadClient() {
               </svg>
             </div>
             <p className="text-sm font-semibold text-grey-950">
-              {isDragging ? "Drop it here" : "Drop coverage-dashboard.html here"}
+              {isDragging ? "Drop it here" : "Drop coverage-data.csv here"}
             </p>
-            <p className="text-xs text-grey-400">or click to browse</p>
+            <p className="text-xs text-grey-400">or click to browse · .csv or .html accepted</p>
           </div>
         )}
       </div>

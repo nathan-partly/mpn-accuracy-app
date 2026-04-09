@@ -19,11 +19,11 @@ export default async function CoverageUploadPage() {
         <p className="text-xs font-semibold text-brand-blue uppercase tracking-widest mb-1">Coverage</p>
         <h1 className="text-2xl font-bold text-grey-950">New Coverage Snapshot</h1>
         <p className="text-grey-400 text-sm mt-1">
-          Download the current data, update it with your generation script, then re-upload.
+          Download the current data as a CSV, edit it, then re-upload.
         </p>
       </div>
 
-      {/* Step 1: Download */}
+      {/* Step 1: Download CSV */}
       <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-5">
         <div className="h-1 bg-brand-blue" />
         <div className="p-6">
@@ -33,48 +33,34 @@ export default async function CoverageUploadPage() {
               <div>
                 <p className="font-semibold text-grey-950 text-sm">Download current coverage data</p>
                 <p className="text-grey-400 text-sm mt-0.5">
-                  Get the latest <code className="bg-grey-50 px-1 py-0.5 rounded text-xs font-mono">coverage-dashboard.html</code> to use as a base for your update.
+                  Get the latest <code className="bg-grey-50 px-1 py-0.5 rounded text-xs font-mono">coverage-data.csv</code> to edit in Excel or any spreadsheet app.
                 </p>
               </div>
             </div>
             <a
-              href="/api/coverage-html"
-              download="coverage-dashboard.html"
+              href="/api/coverage-csv"
+              download="coverage-data.csv"
               className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border border-brand-blue text-brand-blue text-sm font-semibold rounded-lg hover:bg-brand-tint transition-colors whitespace-nowrap"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
-              Download
+              Download CSV
             </a>
           </div>
         </div>
       </div>
 
-      {/* Step 2: Regenerate (instruction only) */}
-      <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-5">
-        <div className="h-1 bg-grey-100" />
-        <div className="p-6 flex gap-3">
-          <span className="flex-shrink-0 w-6 h-6 bg-grey-100 text-grey-500 rounded-full flex items-center justify-center text-xs font-bold mt-0.5">2</span>
-          <div>
-            <p className="font-semibold text-grey-950 text-sm">Run your coverage generation script</p>
-            <p className="text-grey-400 text-sm mt-0.5">
-              This produces a fresh <code className="bg-grey-50 px-1 py-0.5 rounded text-xs font-mono">coverage-dashboard.html</code> from the latest VIN master list.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Step 3: Upload (client component) */}
+      {/* Step 2: Upload (client component) */}
       <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-8">
         <div className="h-1 bg-brand-blue" />
         <div className="p-6">
           <div className="flex gap-3 mb-5">
-            <span className="flex-shrink-0 w-6 h-6 bg-brand-tint text-brand-blue rounded-full flex items-center justify-center text-xs font-bold mt-0.5">3</span>
+            <span className="flex-shrink-0 w-6 h-6 bg-brand-tint text-brand-blue rounded-full flex items-center justify-center text-xs font-bold mt-0.5">2</span>
             <div>
-              <p className="font-semibold text-grey-950 text-sm">Upload the new coverage file</p>
+              <p className="font-semibold text-grey-950 text-sm">Upload the updated CSV</p>
               <p className="text-grey-400 text-sm mt-0.5">
-                Drop or select the new <code className="bg-grey-50 px-1 py-0.5 rounded text-xs font-mono">coverage-dashboard.html</code>. It will be live immediately — no deploy needed.
+                Drop or select your edited <code className="bg-grey-50 px-1 py-0.5 rounded text-xs font-mono">coverage-data.csv</code>. It will go live immediately — no deploy needed.
               </p>
             </div>
           </div>
