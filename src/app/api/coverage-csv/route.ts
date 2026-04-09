@@ -35,7 +35,7 @@ function dataToCsv(data: Record<string, unknown[]>): string {
   const header = ["Make", "Region", "VIN", "Coverage Status"];
   const rows: string[] = [header.join(",")];
 
-  for (const [region, makes] of Object.entries(data)) {
+  for (const [region, makes] of Object.entries(data).filter(([r]) => r !== "ALL")) {
     for (const entry of makes as Array<{
       make: string; yv: string[]; nv: string[];
     }>) {

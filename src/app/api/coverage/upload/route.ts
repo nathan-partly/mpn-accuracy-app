@@ -77,6 +77,30 @@ function parseCsvToData(csv: string): Record<string, unknown[]> {
     });
   }
 
+  // Re-build the ALL aggregate (sum across all regions, deduped by VIN)
+  const allMakes: Record<string, { yv: Set<string>; nv: Set<string> }> = {};
+  for (const makes of Object.values(acc)) {
+    for (const [make, vins] of Object.entries(makes)) {
+      if (!allMakes[make]) allMakes[make] = { yv: new Set(), nv: new Set() };
+      vins.yv.forEach((v) => allMakes[make].yv.add(v));
+      vins.nv.forEach((v) => allMakes[make].nv.add(v));
+    }
+  }
+  const totalVinsAll = Object.values(allMakes).reduce(
+    (sum, m) => sum + m.yv.size + m.nv.size, 0
+  );
+  data["ALL"] = Object.entries(allMakes).map(([make, vins]) => {
+    const yv = Array.from(vins.yv);
+    const nv = Array.from(vins.nv);
+    const y = yv.length;
+    const n = nv.length;
+    const total = y + n;
+    const rate = total === 0 ? 0 : Math.round((y / total) * 1000) / 10;
+    const share = totalVinsAll === 0 ? 0 : Math.round((total / totalVinsAll) * 1000) / 10;
+    const logo = make.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return { make, logo, y, n, total, rate, share, yv, nv };
+  });
+
   return data;
 }
 
