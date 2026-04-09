@@ -32,30 +32,19 @@ function extractDataFromHtml(html: string): Record<string, unknown[]> | null {
 }
 
 function dataToCsv(data: Record<string, unknown[]>): string {
-  const header = ["region", "make", "logo", "y", "n", "total", "rate", "share", "yes_vins", "no_vins"];
+  const header = ["Make", "Region", "VIN", "Coverage Status"];
   const rows: string[] = [header.join(",")];
 
   for (const [region, makes] of Object.entries(data)) {
     for (const entry of makes as Array<{
-      make: string; logo: string; y: number; n: number;
-      total: number; rate: number; share: number;
-      yv: string[]; nv: string[];
+      make: string; yv: string[]; nv: string[];
     }>) {
-      const yesVins = (entry.yv ?? []).join("|");
-      const noVins = (entry.nv ?? []).join("|");
-      const row = [
-        region,
-        `"${entry.make}"`,
-        entry.logo ?? "",
-        entry.y ?? 0,
-        entry.n ?? 0,
-        entry.total ?? 0,
-        entry.rate ?? 0,
-        entry.share ?? 0,
-        `"${yesVins}"`,
-        `"${noVins}"`,
-      ];
-      rows.push(row.join(","));
+      for (const vin of (entry.yv ?? [])) {
+        rows.push([`"${entry.make}"`, region, vin, "Yes"].join(","));
+      }
+      for (const vin of (entry.nv ?? [])) {
+        rows.push([`"${entry.make}"`, region, vin, "No"].join(","));
+      }
     }
   }
 

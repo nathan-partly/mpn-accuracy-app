@@ -22,48 +22,59 @@ function parseCsvToData(csv: string): Record<string, unknown[]> {
     return i;
   };
 
-  const iRegion = idx("region");
   const iMake = idx("make");
-  const iLogo = idx("logo");
-  const iY = idx("y");
-  const iN = idx("n");
-  const iTotal = idx("total");
-  const iRate = idx("rate");
-  const iShare = idx("share");
-  const iYesVins = idx("yes_vins");
-  const iNoVins = idx("no_vins");
+  const iRegion = idx("region");
+  const iVin = idx("vin");
+  const iStatus = idx("coverage status");
 
-  const data: Record<string, unknown[]> = {};
+  // Accumulate VINs per region → make
+  const acc: Record<string, Record<string, { yv: string[]; nv: string[] }>> = {};
 
   for (let i = 1; i < lines.length; i++) {
-    // Simple CSV parse respecting double-quoted fields
     const cols = parseCsvLine(lines[i]);
-    if (cols.length < header.length) continue;
+    if (cols.length < 4) continue;
 
+    const make = cols[iMake].trim();
     const region = cols[iRegion].trim();
-    if (!region) continue;
+    const vin = cols[iVin].trim();
+    const status = cols[iStatus].trim().toLowerCase();
 
-    const yesVins = cols[iYesVins].trim();
-    const noVins = cols[iNoVins].trim();
+    if (!make || !region || !vin) continue;
 
-    const entry = {
-      make: cols[iMake].trim(),
-      logo: cols[iLogo].trim(),
-      y: Number(cols[iY]) || 0,
-      n: Number(cols[iN]) || 0,
-      total: Number(cols[iTotal]) || 0,
-      rate: Number(cols[iRate]) || 0,
-      share: Number(cols[iShare]) || 0,
-      yv: yesVins ? yesVins.split("|").filter(Boolean) : [],
-      nv: noVins ? noVins.split("|").filter(Boolean) : [],
-    };
+    if (!acc[region]) acc[region] = {};
+    if (!acc[region][make]) acc[region][make] = { yv: [], nv: [] };
 
-    if (!data[region]) data[region] = [];
-    data[region].push(entry);
+    if (status === "yes") {
+      acc[region][make].yv.push(vin);
+    } else {
+      acc[region][make].nv.push(vin);
+    }
   }
 
-  if (Object.keys(data).length === 0) {
+  if (Object.keys(acc).length === 0) {
     throw new Error("CSV produced no valid data rows");
+  }
+
+  // Build DATA structure, auto-calculating share, rate, logo
+  const data: Record<string, unknown[]> = {};
+
+  for (const [region, makes] of Object.entries(acc)) {
+    const totalVinsInRegion = Object.values(makes).reduce(
+      (sum, m) => sum + m.yv.length + m.nv.length, 0
+    );
+
+    data[region] = Object.entries(makes).map(([make, vins]) => {
+      const y = vins.yv.length;
+      const n = vins.nv.length;
+      const total = y + n;
+      const rate = total === 0 ? 0 : Math.round((y / total) * 1000) / 10;
+      const share = totalVinsInRegion === 0 ? 0 :
+        Math.round((total / totalVinsInRegion) * 1000) / 10;
+      // Derive logo slug from make name (lowercase, no spaces/special chars)
+      const logo = make.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      return { make, logo, y, n, total, rate, share, yv: vins.yv, nv: vins.nv };
+    });
   }
 
   return data;
