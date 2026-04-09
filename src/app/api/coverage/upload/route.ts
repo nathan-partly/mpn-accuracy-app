@@ -96,15 +96,26 @@ function parseCsvLine(line: string): string[] {
 
 function injectDataIntoHtml(html: string, data: Record<string, unknown[]>): string {
   const dataJson = JSON.stringify(data);
-  // Replace the existing DATA constant with the new one
-  const replaced = html.replace(
-    /const DATA\s*=\s*\{[\s\S]*?\};\s*\n/,
-    `const DATA = ${dataJson};\n`
-  );
-  if (replaced === html) {
+  // Find the DATA constant and replace it using bracket counting
+  const marker = "const DATA = ";
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx === -1) {
     throw new Error("Could not find DATA constant in HTML template to replace");
   }
-  return replaced;
+  const jsonStart = html.indexOf("{", markerIdx + marker.length);
+  if (jsonStart === -1) {
+    throw new Error("Could not find DATA object start in HTML template");
+  }
+  let depth = 0;
+  let i = jsonStart;
+  for (; i < html.length; i++) {
+    if (html[i] === "{") depth++;
+    else if (html[i] === "}") {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  return html.slice(0, markerIdx) + `const DATA = ${dataJson}` + html.slice(i + 1);
 }
 
 async function getHtmlTemplate(): Promise<string> {

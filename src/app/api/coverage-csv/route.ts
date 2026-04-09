@@ -6,10 +6,26 @@ import { join } from "path";
 export const dynamic = "force-dynamic";
 
 function extractDataFromHtml(html: string): Record<string, unknown[]> | null {
-  const match = html.match(/const DATA\s*=\s*(\{[\s\S]*?\});\s*\n/);
-  if (!match) return null;
+  const marker = "const DATA = ";
+  const start = html.indexOf(marker);
+  if (start === -1) return null;
+
+  // Walk forward from the opening `{` counting brackets to find the matching `}`
+  let jsonStart = html.indexOf("{", start + marker.length);
+  if (jsonStart === -1) return null;
+
+  let depth = 0;
+  let i = jsonStart;
+  for (; i < html.length; i++) {
+    if (html[i] === "{") depth++;
+    else if (html[i] === "}") {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+
   try {
-    return JSON.parse(match[1]);
+    return JSON.parse(html.slice(jsonStart, i + 1));
   } catch {
     return null;
   }
