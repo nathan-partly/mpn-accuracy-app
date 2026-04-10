@@ -124,7 +124,7 @@ function parseCsvToData(csv: string): Record<string, unknown[]> {
     const total = y + n;
     const rate = total === 0 ? 0 : Math.round((y / total) * 1000) / 10;
     const share = totalVinsAll === 0 ? 0 : Math.round((total / totalVinsAll) * 1000) / 10;
-    const logo = make.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const logo = deriveLogo(make);
     return { make, logo, y, n, total, rate, share, yv, nv };
   });
 
