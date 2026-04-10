@@ -42,7 +42,7 @@ export async function getAllBrands(): Promise<Brand[]> {
       SELECT *
       FROM benchmark_snapshots
       WHERE brand_id = b.id
-      ORDER BY snapshot_date DESC
+      ORDER BY snapshot_date DESC, created_at DESC
       LIMIT 1
     ) s ON true
     LEFT JOIN benchmark_snapshots s2 ON s2.brand_id = b.id
