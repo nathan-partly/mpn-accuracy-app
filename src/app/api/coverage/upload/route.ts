@@ -9,6 +9,33 @@ export const dynamic = "force-dynamic";
 
 // Vercel body size limit is 4.5 MB by default — coverage HTML is ~600 KB, well within limit.
 
+// ── Logo slug helpers ─────────────────────────────────────────────────────────
+
+// Overrides for makes whose CDN slug can't be derived automatically from the name
+const LOGO_OVERRIDES: Record<string, string> = {
+  "mercedes":        "mercedes-benz",
+  "mercedes benz":   "mercedes-benz",
+  "mercedes-benz":   "mercedes-benz",
+  "mercedesbenz":    "mercedes-benz",
+  "land rover":      "land-rover",
+  "alfa romeo":      "alfa-romeo",
+  "alfa":            "alfa-romeo",
+  "great":           "great-wall",        // "GREAT" = Great Wall Motors in source data
+  "great wall":      "great-wall",
+  "great wall motors": "great-wall",
+  "vw":              "volkswagen",
+  "vw / audi":       "volkswagen",
+  "gm":              "general-motors",
+  "bmw / mini":      "bmw",
+};
+
+function deriveLogo(make: string): string {
+  const key = make.toLowerCase().trim();
+  if (LOGO_OVERRIDES[key]) return LOGO_OVERRIDES[key];
+  // Default: lowercase and replace spaces/special chars with hyphens, collapse runs
+  return key.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 // ── CSV helpers ────────────────────────────────────────────────────────────────
 
 function parseCsvToData(csv: string): Record<string, unknown[]> {
@@ -71,7 +98,7 @@ function parseCsvToData(csv: string): Record<string, unknown[]> {
       const share = totalVinsInRegion === 0 ? 0 :
         Math.round((total / totalVinsInRegion) * 1000) / 10;
       // Derive logo slug from make name (lowercase, no spaces/special chars)
-      const logo = make.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const logo = deriveLogo(make);
 
       return { make, logo, y, n, total, rate, share, yv: vins.yv, nv: vins.nv };
     });
