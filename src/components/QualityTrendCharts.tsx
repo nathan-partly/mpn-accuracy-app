@@ -268,8 +268,8 @@ export function QualityTrendCharts({ rows }: Props) {
           // When expanding, add new brands to visible set by default
           if (!showAll) {
             const newBrands = allBrands.slice(TOP_N);
-            setClassVisible((prev) => new Set([...prev, ...newBrands]));
-            setAnnotVisible((prev) => new Set([...prev, ...newBrands]));
+            setClassVisible((prev) => new Set(Array.from(prev).concat(newBrands)));
+            setAnnotVisible((prev) => new Set(Array.from(prev).concat(newBrands)));
           }
         }}
       />
