@@ -239,6 +239,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const id = await saveCoverageSnapshot(html, session.user.email);
+  // Extract DATA from the final HTML to store as lightweight data_json
+  let dataJson: string | undefined;
+  try {
+    const marker = "const DATA = ";
+    const markerIdx = html.indexOf(marker);
+    if (markerIdx !== -1) {
+      const jsonStart = html.indexOf("{", markerIdx + marker.length);
+      let depth = 0, i = jsonStart;
+      for (; i < html.length; i++) {
+        if (html[i] === "{") depth++;
+        else if (html[i] === "}") { depth--; if (depth === 0) break; }
+      }
+      dataJson = html.slice(jsonStart, i + 1);
+    }
+  } catch { /* non-fatal */ }
+
+  const id = await saveCoverageSnapshot(html, session.user.email, dataJson);
   return NextResponse.json({ success: true, id });
 }

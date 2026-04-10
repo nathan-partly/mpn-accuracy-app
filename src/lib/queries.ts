@@ -728,11 +728,12 @@ export interface CoverageSnapshot {
 
 export async function saveCoverageSnapshot(
   htmlContent: string,
-  uploadedBy?: string
+  uploadedBy?: string,
+  dataJson?: string
 ): Promise<number> {
   const [row] = await sql`
-    INSERT INTO coverage_snapshots (html_content, uploaded_by)
-    VALUES (${htmlContent}, ${uploadedBy ?? null})
+    INSERT INTO coverage_snapshots (html_content, uploaded_by, data_json)
+    VALUES (${htmlContent}, ${uploadedBy ?? null}, ${dataJson ?? null})
     RETURNING id
   `;
   return row.id as number;
@@ -741,16 +742,30 @@ export async function saveCoverageSnapshot(
 export async function getLatestCoverageSnapshot(): Promise<{
   id: number;
   html_content: string;
+  data_json: string | null;
   uploaded_by: string | null;
   created_at: string;
 } | null> {
+  // Select html_content only for legacy display; data_json is used for CSV export
   const rows = await sql`
-    SELECT id, html_content, uploaded_by, created_at
+    SELECT id, html_content, data_json, uploaded_by, created_at
     FROM coverage_snapshots
     ORDER BY created_at DESC
     LIMIT 1
   `;
-  return (rows[0] as { id: number; html_content: string; uploaded_by: string | null; created_at: string }) ?? null;
+  return (rows[0] as { id: number; html_content: string; data_json: string | null; uploaded_by: string | null; created_at: string }) ?? null;
+}
+
+export async function getLatestCoverageDataJson(): Promise<string | null> {
+  // Fetches only the small data_json column — avoids large html_content payload
+  const rows = await sql`
+    SELECT data_json
+    FROM coverage_snapshots
+    WHERE data_json IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  return (rows[0]?.data_json as string) ?? null;
 }
 
 export async function getAllCoverageSnapshots(): Promise<CoverageSnapshot[]> {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getLatestCoverageSnapshot } from "@/lib/queries";
+import { getLatestCoverageDataJson } from "@/lib/queries";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -10,7 +10,6 @@ function extractDataFromHtml(html: string): Record<string, unknown[]> | null {
   const start = html.indexOf(marker);
   if (start === -1) return null;
 
-  // Walk forward from the opening `{` counting brackets to find the matching `}`
   let jsonStart = html.indexOf("{", start + marker.length);
   if (jsonStart === -1) return null;
 
@@ -36,9 +35,7 @@ function dataToCsv(data: Record<string, unknown[]>): string {
   const rows: string[] = [header.join(",")];
 
   for (const [region, makes] of Object.entries(data).filter(([r]) => r !== "ALL")) {
-    for (const entry of makes as Array<{
-      make: string; yv: string[]; nv: string[];
-    }>) {
+    for (const entry of makes as Array<{ make: string; yv: string[]; nv: string[] }>) {
       for (const vin of (entry.yv ?? [])) {
         rows.push([`"${entry.make}"`, region, vin, "Yes"].join(","));
       }
@@ -52,28 +49,33 @@ function dataToCsv(data: Record<string, unknown[]>): string {
 }
 
 export async function GET() {
-  let html: string | null = null;
+  let data: Record<string, unknown[]> | null = null;
 
+  // Try the lightweight data_json column first
   try {
-    const latest = await getLatestCoverageSnapshot();
-    if (latest?.html_content) {
-      html = latest.html_content;
+    const dataJson = await getLatestCoverageDataJson();
+    if (dataJson) {
+      data = JSON.parse(dataJson);
     }
   } catch {
-    // fall through to static file
+    // fall through
   }
 
-  if (!html) {
+  // Fallback: parse from the static bundled HTML
+  if (!data) {
     try {
-      html = readFileSync(join(process.cwd(), "public", "coverage-dashboard.html"), "utf-8");
+      const html = readFileSync(
+        join(process.cwd(), "public", "coverage-dashboard.html"),
+        "utf-8"
+      );
+      data = extractDataFromHtml(html);
     } catch {
-      return new NextResponse("Coverage data not found", { status: 404 });
+      // ignore
     }
   }
 
-  const data = extractDataFromHtml(html);
   if (!data) {
-    return new NextResponse("Could not parse coverage data from dashboard", { status: 500 });
+    return new NextResponse("Coverage data not found", { status: 404 });
   }
 
   const csv = dataToCsv(data);
