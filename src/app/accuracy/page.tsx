@@ -13,7 +13,7 @@ import { AccuracySnapshotHistory } from "@/components/AccuracySnapshotHistory";
 import { accuracyPct } from "@/lib/utils";
 import type { GlobalProviderStat } from "@/types";
 
-export const revalidate = 60; // ISR — revalidate every 60s
+export const dynamic = "force-dynamic"; // always fetch fresh data
 
 export default async function DashboardPage() {
   const [brands, stats, providerStats, snapshotHistory] = await Promise.all([

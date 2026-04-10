@@ -13,7 +13,7 @@ export const metadata = {
   title: "Quality | Interpreter Metrics",
 };
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic"; // always fetch fresh data
 
 export default async function QualityPage() {
   const [latest, snapshots, trendRows] = await Promise.all([

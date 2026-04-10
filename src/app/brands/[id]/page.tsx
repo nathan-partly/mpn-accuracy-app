@@ -19,7 +19,7 @@ import { DeleteSnapshotButton } from "@/components/DeleteSnapshotButton";
 import { SnapshotDiffPanel } from "@/components/SnapshotDiffPanel";
 import { formatDate, formatPct, accuracyPct } from "@/lib/utils";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic"; // always fetch fresh data
 
 interface Props {
   params: { id: string };
