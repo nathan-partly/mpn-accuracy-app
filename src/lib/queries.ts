@@ -167,40 +167,53 @@ export async function insertRecords(
 ): Promise<void> {
   if (records.length === 0) return;
 
-  // Insert in batches of 500
-  const batchSize = 500;
-  for (let i = 0; i < records.length; i += batchSize) {
-    const batch = records.slice(i, i + batchSize);
-    const values = batch.map((r) => ({
-      snapshot_id:        r.snapshot_id,
-      brand_id:           r.brand_id,
-      region:             r.region ?? null,
-      vin:                r.vin,
-      make:               r.make ?? null,
-      model:              r.model ?? null,
-      year:               r.year ?? null,
-      upstream_provider:  r.upstream_provider ?? null,
-      part_type:          r.part_type,
-      interpreter_output: r.interpreter_output ?? null,
-      epc_output:         r.epc_output ?? null,
-      pl24_output:        r.pl24_output ?? null,
-      epc_source:         r.epc_source ?? null,
-      is_valid:           r.is_valid,
-      notes:              r.notes ?? null,
-    }));
+  const snapshotId = records[0].snapshot_id;
 
-    for (const v of values) {
-      await sql`
-        INSERT INTO benchmark_records
-          (snapshot_id, brand_id, region, vin, make, model, year,
-           upstream_provider, part_type, interpreter_output, epc_output, pl24_output, epc_source, is_valid, notes)
-        VALUES
-          (${v.snapshot_id}, ${v.brand_id}, ${v.region}, ${v.vin},
-           ${v.make}, ${v.model}, ${v.year}, ${v.upstream_provider},
-           ${v.part_type}, ${v.interpreter_output}, ${v.epc_output},
-           ${v.pl24_output}, ${v.epc_source}, ${v.is_valid}, ${v.notes})
-      `;
+  try {
+    // Insert in batches of 500
+    const batchSize = 500;
+    for (let i = 0; i < records.length; i += batchSize) {
+      const batch = records.slice(i, i + batchSize);
+      const values = batch.map((r) => ({
+        snapshot_id:        r.snapshot_id,
+        brand_id:           r.brand_id,
+        region:             r.region ?? null,
+        vin:                r.vin,
+        make:               r.make ?? null,
+        model:              r.model ?? null,
+        year:               r.year ?? null,
+        upstream_provider:  r.upstream_provider ?? null,
+        part_type:          r.part_type,
+        interpreter_output: r.interpreter_output ?? null,
+        epc_output:         r.epc_output ?? null,
+        pl24_output:        r.pl24_output ?? null,
+        epc_source:         r.epc_source ?? null,
+        is_valid:           r.is_valid,
+        notes:              r.notes ?? null,
+      }));
+
+      for (const v of values) {
+        await sql`
+          INSERT INTO benchmark_records
+            (snapshot_id, brand_id, region, vin, make, model, year,
+             upstream_provider, part_type, interpreter_output, epc_output, pl24_output, epc_source, is_valid, notes)
+          VALUES
+            (${v.snapshot_id}, ${v.brand_id}, ${v.region}, ${v.vin},
+             ${v.make}, ${v.model}, ${v.year}, ${v.upstream_provider},
+             ${v.part_type}, ${v.interpreter_output}, ${v.epc_output},
+             ${v.pl24_output}, ${v.epc_source}, ${v.is_valid}, ${v.notes})
+        `;
+      }
     }
+  } catch (err) {
+    // Roll back any partially-inserted records so the snapshot isn't left in a broken state
+    try {
+      await sql`DELETE FROM benchmark_records WHERE snapshot_id = ${snapshotId}`;
+    } catch {
+      // best-effort cleanup — log but don't mask the original error
+      console.error(`[insertRecords] cleanup failed for snapshot ${snapshotId}`);
+    }
+    throw err;
   }
 }
 
@@ -570,24 +583,44 @@ export async function getQualityTrendForBrand(brand: string): Promise<QualityTre
 }
 
 export async function getQualityTrendForTopBrands(): Promise<{ brand: string; points: QualityTrendPoint[] }[]> {
-  // Get the top brands by total_diagrams from the latest snapshot
-  const topBrands = await sql`
-    SELECT DISTINCT qb.brand
+  // Single query: fetch trend data for all brands that appear in the latest snapshot
+  const rows = await sql`
+    WITH latest_snapshot AS (
+      SELECT id FROM quality_snapshots ORDER BY snapshot_date DESC LIMIT 1
+    ),
+    top_brands AS (
+      SELECT DISTINCT qb.brand
+      FROM quality_brand_data qb
+      WHERE qb.snapshot_id = (SELECT id FROM latest_snapshot)
+      ORDER BY qb.brand ASC
+      LIMIT 10
+    )
+    SELECT
+      qs.snapshot_date::text AS snapshot_date,
+      qb.brand,
+      qb.classification_pct,
+      qb.annotation_pct,
+      qb.total_diagrams
     FROM quality_brand_data qb
     JOIN quality_snapshots qs ON qs.id = qb.snapshot_id
-    WHERE qs.id = (SELECT id FROM quality_snapshots ORDER BY snapshot_date DESC LIMIT 1)
-    ORDER BY qb.brand ASC
-    LIMIT 10
+    WHERE qb.brand IN (SELECT brand FROM top_brands)
+    ORDER BY qb.brand ASC, qs.snapshot_date ASC
   `;
 
-  const brands = topBrands.map((r) => r.brand as string);
-  const result: { brand: string; points: QualityTrendPoint[] }[] = [];
-
-  for (const brand of brands) {
-    const points = await getQualityTrendForBrand(brand);
-    result.push({ brand, points });
+  // Group flat rows into per-brand point arrays
+  const brandMap = new Map<string, QualityTrendPoint[]>();
+  for (const row of rows) {
+    const brand = row.brand as string;
+    if (!brandMap.has(brand)) brandMap.set(brand, []);
+    brandMap.get(brand)!.push({
+      snapshot_date: row.snapshot_date as string,
+      classification_pct: row.classification_pct as number | null,
+      annotation_pct: row.annotation_pct as number | null,
+      total_diagrams: row.total_diagrams as number | null,
+    });
   }
-  return result;
+
+  return Array.from(brandMap.entries()).map(([brand, points]) => ({ brand, points }));
 }
 
 export async function createQualitySnapshot(

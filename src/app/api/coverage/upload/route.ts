@@ -185,11 +185,16 @@ async function getHtmlTemplate(): Promise<string> {
   try {
     const latest = await getLatestCoverageSnapshot();
     if (latest?.html_content) return latest.html_content;
-  } catch {
-    // fall through
+  } catch (err) {
+    console.error("[getHtmlTemplate] DB fetch failed, falling back to static file:", err);
   }
   // Fall back to the static bundled file
-  return readFileSync(join(process.cwd(), "public", "coverage-dashboard.html"), "utf-8");
+  try {
+    return readFileSync(join(process.cwd(), "public", "coverage-dashboard.html"), "utf-8");
+  } catch (err) {
+    console.error("[getHtmlTemplate] Static file read failed:", err);
+    throw new Error("No HTML template available — upload an HTML snapshot first.");
+  }
 }
 
 // ── Route handler ──────────────────────────────────────────────────────────────
@@ -219,6 +224,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "File must be a CSV (.csv) or HTML (.html) file" },
       { status: 400 }
+    );
+  }
+
+  // Reject files over 4 MB (Vercel's body limit is 4.5 MB; this gives headroom)
+  const MAX_BYTES = 4 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      { error: `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed is 4 MB.` },
+      { status: 413 }
     );
   }
 
