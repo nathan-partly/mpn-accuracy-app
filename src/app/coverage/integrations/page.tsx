@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 
 interface DataIntegration {
@@ -50,6 +50,7 @@ export default function DataIntegrationsPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const fetchIntegrations = useCallback(async () => {
     try {
@@ -71,6 +72,7 @@ export default function DataIntegrationsPage() {
     setBrandsInput("");
     setFormError(null);
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   function openEdit(row: DataIntegration) {
@@ -87,6 +89,7 @@ export default function DataIntegrationsPage() {
     setBrandsInput(row.brands.join(", "));
     setFormError(null);
     setShowForm(true);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   function cancelForm() {
@@ -221,7 +224,7 @@ export default function DataIntegrationsPage() {
 
         {/* Add / Edit Form */}
         {showForm && (
-          <div className="bg-white border border-grey-100 rounded-xl p-6 mb-6 shadow-sm">
+          <div ref={formRef} className="bg-white border border-brand-blue rounded-xl p-6 mb-6 shadow-sm">
             <h2 className="text-sm font-bold text-grey-950 mb-4">
               {editId ? "Edit Integration" : "Add Integration"}
             </h2>
