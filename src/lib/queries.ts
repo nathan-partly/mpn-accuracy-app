@@ -683,6 +683,8 @@ export async function createQualitySnapshot(
   // Carry forward VIO data from the most recent previous snapshot for each brand
   // where VIO columns are still NULL (i.e. not provided in this upload).
   // VIO market share data changes infrequently so this avoids losing it every upload.
+  // Name matching is normalised (strip non-alphanumeric) so "MERCEDES BENZ" matches
+  // "MERCEDES-BENZ" across snapshots that used different formatting.
   await sql`
     UPDATE quality_brand_data qbd
     SET
@@ -693,15 +695,16 @@ export async function createQualitySnapshot(
       vio_au_pct       = prev.vio_au_pct,
       vio_us_pct       = prev.vio_us_pct
     FROM (
-      SELECT DISTINCT ON (brand)
+      SELECT DISTINCT ON (REGEXP_REPLACE(UPPER(brand), '[^A-Z0-9]', '', 'g'))
         brand, vio_rank, vio_combined_pct, vio_nz_pct, vio_uk_pct, vio_au_pct, vio_us_pct
       FROM quality_brand_data
       WHERE snapshot_id != ${snapshotId}
         AND vio_rank IS NOT NULL
-      ORDER BY brand, snapshot_id DESC
+      ORDER BY REGEXP_REPLACE(UPPER(brand), '[^A-Z0-9]', '', 'g'), snapshot_id DESC
     ) prev
     WHERE qbd.snapshot_id = ${snapshotId}
-      AND qbd.brand = prev.brand
+      AND REGEXP_REPLACE(UPPER(qbd.brand), '[^A-Z0-9]', '', 'g')
+        = REGEXP_REPLACE(UPPER(prev.brand), '[^A-Z0-9]', '', 'g')
       AND qbd.vio_rank IS NULL
   `;
 
