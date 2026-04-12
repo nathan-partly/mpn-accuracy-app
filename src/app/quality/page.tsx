@@ -60,6 +60,15 @@ export default async function QualityPage() {
   const l0 = brands.filter((b) => b.level === "L0");
   const unsupported = brands.filter((b) => b.level === "Unsupported");
 
+  // Sum VIO % for each level group (vio_combined_pct is sum of NZ+UK+AU+US, divide by 4 for avg %)
+  const vioSum = (group: typeof brands) =>
+    group.reduce((sum, b) => sum + (b.vio_combined_pct != null ? Number(b.vio_combined_pct) / 4 : 0), 0);
+
+  const l2Vio = vioSum(l2);
+  const l1Vio = vioSum(l1);
+  const l0Vio = vioSum(l0);
+  const unsupportedVio = vioSum(unsupported);
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       {/* Header */}
@@ -85,10 +94,10 @@ export default async function QualityPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <KpiCard label="Level 2 Brands" value={l2.length} sub="≥80% classification & annotation" highlight />
-        <KpiCard label="Level 1 Brands" value={l1.length} sub="≥20% classification & annotation" />
-        <KpiCard label="Level 0 Brands" value={l0.length} sub="Below L1 threshold" />
-        <KpiCard label="Unsupported" value={unsupported.length} sub="No EPC data" />
+        <KpiCard label="Level 2 Brands" value={l2.length} sub={`Representing ${l2Vio.toFixed(1)}% of global VIO`} highlight />
+        <KpiCard label="Level 1 Brands" value={l1.length} sub={`Representing ${l1Vio.toFixed(1)}% of global VIO`} />
+        <KpiCard label="Level 0 Brands" value={l0.length} sub={`Representing ${l0Vio.toFixed(1)}% of global VIO`} />
+        <KpiCard label="Unsupported" value={unsupported.length} sub={`Representing ${unsupportedVio.toFixed(1)}% of global VIO`} />
       </div>
 
       {/* Level thresholds legend */}
