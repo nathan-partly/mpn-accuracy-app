@@ -152,6 +152,9 @@ export default function DataIntegrationsPage() {
     .reduce((sum, i) => sum + (i.total_vio_pct ?? 0), 0);
   const projectedTotal = integrations
     .reduce((sum, i) => sum + (i.incremental_vio_pct ?? 0), 0);
+  const projectedOfflineTotal = integrations
+    .filter((i) => i.type === "offline")
+    .reduce((sum, i) => sum + (i.total_vio_pct ?? 0), 0);
 
   return (
     <div className="flex flex-col min-h-screen bg-grey-50">
@@ -189,7 +192,7 @@ export default function DataIntegrationsPage() {
 
         {/* Summary KPI row */}
         {integrations.length > 0 && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-grey-100 p-4">
               <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">Live Coverage</p>
               <p className="text-2xl font-bold text-grey-950">{totalIncremental.toFixed(1)}%</p>
@@ -198,7 +201,12 @@ export default function DataIntegrationsPage() {
             <div className="bg-white rounded-xl border border-grey-100 p-4">
               <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">Offline Coverage</p>
               <p className="text-2xl font-bold text-grey-950">{offlineTotalVio.toFixed(1)}%</p>
-              <p className="text-xs text-grey-400 mt-0.5">from offline integrations</p>
+              <p className="text-xs text-grey-400 mt-0.5">live offline integrations</p>
+            </div>
+            <div className="bg-white rounded-xl border border-grey-100 p-4">
+              <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">Projected Offline</p>
+              <p className="text-2xl font-bold text-emerald-600">{projectedOfflineTotal.toFixed(1)}%</p>
+              <p className="text-xs text-grey-400 mt-0.5">including future targets</p>
             </div>
             <div className="bg-white rounded-xl border border-grey-100 p-4">
               <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">Projected Total</p>
