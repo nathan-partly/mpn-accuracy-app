@@ -91,7 +91,7 @@ function trendChartHtml(): string {
       var p = past[i];
       covCum += (p.incremental_vio_pct != null ? Number(p.incremental_vio_pct) : 0);
       if (p.type === 'offline') {
-        offCum += (p.incremental_vio_pct != null ? Number(p.incremental_vio_pct) : 0);
+        offCum += (p.total_vio_pct != null ? Number(p.total_vio_pct) : 0);
       }
       actualPoints.push({ date: p.integration_date, cov: covCum, off: offCum });
     }
@@ -104,7 +104,7 @@ function trendChartHtml(): string {
       var f = future[j];
       bridgeCov += (f.incremental_vio_pct != null ? Number(f.incremental_vio_pct) : 0);
       if (f.type === 'offline') {
-        bridgeOff += (f.incremental_vio_pct != null ? Number(f.incremental_vio_pct) : 0);
+        bridgeOff += (f.total_vio_pct != null ? Number(f.total_vio_pct) : 0);
       }
       projectedPoints.push({ date: f.integration_date, cov: bridgeCov, off: bridgeOff });
     }
