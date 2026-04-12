@@ -419,7 +419,7 @@ export default function UploadPage() {
                   )},
                   { col: "interpreter_output", req: false, note: "MPN returned by the interpreter" },
                   { col: "epc_output", req: false, note: "MPN from the original EPC" },
-                  { col: "pl24_output", req: false, note: "MPN from PL24 (non-original EPC)" },
+                  { col: "pl24_output", req: false, note: "MPN from trusted third-party source (non-original EPC)" },
                   { col: "region", req: false, note: 'E.g. "EU", "US"' },
                   { col: "make", req: false, note: "Vehicle make" },
                   { col: "model", req: false, note: "Vehicle model" },

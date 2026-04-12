@@ -138,7 +138,7 @@ export function ExpandableModelTable({ modelBreakdown, records }: Props) {
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr className="border-b border-grey-100">
-                                    {["HCA", "Interpreter Output", "EPC Output", "PL24 Output", "Result"].map((h) => (
+                                    {["HCA", "Interpreter Output", "EPC Output", "Trusted Third-Party Output", "Result"].map((h) => (
                                       <th key={h} className="text-left px-4 py-2 pl-10 text-grey-400 font-semibold uppercase tracking-widest whitespace-nowrap">
                                         {h}
                                       </th>
