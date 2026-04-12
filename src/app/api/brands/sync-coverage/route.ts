@@ -63,15 +63,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ added: [], skipped: [], total_covered: 0 });
   }
 
-  // 3. Get existing brand names (normalised upper for comparison)
+  // 3. Get existing brand names (normalised: upper + strip non-alphanumeric)
+  //    This mirrors the normalisation used in the coverage iframe injection so that
+  //    "Mercedes-Benz", "Mercedes Benz", "MERCEDESBENZ" all match each other.
+  function norm(s: string) {
+    return s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
   const existingRows = await sql`SELECT name FROM brands`;
-  const existingNorm = new Set(
-    existingRows.map((r) => String(r.name).toUpperCase().trim())
+  // Map from normalised key → canonical stored name
+  const existingByNorm = new Map<string, string>(
+    existingRows.map((r) => [norm(String(r.name)), String(r.name)])
   );
 
   // 4. Split into new vs already-known
-  const toAdd    = coveredMakes.filter((m) => !existingNorm.has(m.toUpperCase()));
-  const skipped  = coveredMakes.filter((m) =>  existingNorm.has(m.toUpperCase()));
+  const toAdd   = coveredMakes.filter((m) => !existingByNorm.has(norm(m)));
+  const skipped = coveredMakes.filter((m) =>  existingByNorm.has(norm(m)));
 
   // 5. Insert new brands as pending
   const added: string[] = [];

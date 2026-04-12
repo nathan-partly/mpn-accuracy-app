@@ -29,7 +29,7 @@ export function SyncCoverageButton() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="flex flex-col items-end gap-2 relative">
       <button
         onClick={handleSync}
         disabled={state === "loading"}
@@ -54,18 +54,21 @@ export function SyncCoverageButton() {
       </button>
 
       {state === "done" && result && (
-        <div className="text-xs bg-white border border-grey-100 rounded-lg px-3 py-2 shadow-sm max-w-xs text-right">
+        <div className="text-xs bg-white border border-grey-100 rounded-lg px-3 py-2 shadow-sm max-w-sm text-right space-y-1">
           {result.added.length > 0 ? (
-            <>
+            <div>
               <span className="text-emerald-600 font-semibold">
-                {result.added.length} brand{result.added.length !== 1 ? "s" : ""} added:
+                {result.added.length} brand{result.added.length !== 1 ? "s" : ""} added to pending:
               </span>{" "}
               <span className="text-grey-600">{result.added.join(", ")}</span>
-            </>
+            </div>
           ) : (
-            <span className="text-grey-500">All covered brands are already listed ({result.skipped.length} found).</span>
+            <div className="text-grey-500">No new brands to add.</div>
           )}
-          <button onClick={dismiss} className="ml-2 text-grey-300 hover:text-grey-500">✕</button>
+          <div className="text-grey-400">
+            {result.skipped.length} already in system: {result.skipped.join(", ")}
+          </div>
+          <button onClick={dismiss} className="absolute top-2 right-2 text-grey-300 hover:text-grey-500">✕</button>
         </div>
       )}
 
