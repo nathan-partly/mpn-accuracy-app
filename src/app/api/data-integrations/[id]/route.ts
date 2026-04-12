@@ -12,7 +12,7 @@ export async function PUT(
     if (isNaN(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const body = await req.json();
-    const { name, type, brands, total_vio_pct, incremental_vio_pct, integration_date } = body;
+    const { name, type, relationship, brands, total_vio_pct, incremental_vio_pct, integration_date } = body;
 
     if (!name?.trim() || !type || !integration_date) {
       return NextResponse.json(
@@ -26,6 +26,7 @@ export async function PUT(
         { status: 400 }
       );
     }
+    const rel: string = ["direct", "third-party"].includes(relationship) ? relationship : "third-party";
 
     const brandsArr: string[] = Array.isArray(brands)
       ? brands.map((b: string) => b.trim()).filter(Boolean)
@@ -38,6 +39,7 @@ export async function PUT(
       SET
         name                = ${name.trim()},
         type                = ${type},
+        relationship        = ${rel},
         brands              = ${brandsArr},
         total_vio_pct       = ${tvio},
         incremental_vio_pct = ${ivio},
@@ -45,7 +47,7 @@ export async function PUT(
         updated_at          = NOW()
       WHERE id = ${id}
       RETURNING
-        id, name, type, brands,
+        id, name, type, relationship, brands,
         total_vio_pct::float       AS total_vio_pct,
         incremental_vio_pct::float AS incremental_vio_pct,
         integration_date::text     AS integration_date,

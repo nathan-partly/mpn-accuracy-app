@@ -7,6 +7,7 @@ interface DataIntegration {
   id: number;
   name: string;
   type: "online" | "offline";
+  relationship: "direct" | "third-party";
   brands: string[];
   total_vio_pct: number | null;
   incremental_vio_pct: number | null;
@@ -16,6 +17,7 @@ interface DataIntegration {
 const EMPTY_FORM: Omit<DataIntegration, "id"> = {
   name: "",
   type: "online",
+  relationship: "third-party",
   brands: [],
   total_vio_pct: null,
   incremental_vio_pct: null,
@@ -76,6 +78,7 @@ export default function DataIntegrationsPage() {
     setForm({
       name: row.name,
       type: row.type,
+      relationship: row.relationship ?? "third-party",
       brands: row.brands,
       total_vio_pct: row.total_vio_pct,
       incremental_vio_pct: row.incremental_vio_pct,
@@ -252,6 +255,21 @@ export default function DataIntegrationsPage() {
                 </select>
               </div>
 
+              {/* Relationship */}
+              <div>
+                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
+                  Relationship *
+                </label>
+                <select
+                  value={form.relationship}
+                  onChange={(e) => setForm((f) => ({ ...f, relationship: e.target.value as "direct" | "third-party" }))}
+                  className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue bg-white"
+                >
+                  <option value="direct">Direct</option>
+                  <option value="third-party">Third-party</option>
+                </select>
+              </div>
+
               {/* Integration Date */}
               <div>
                 <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
@@ -379,6 +397,9 @@ export default function DataIntegrationsPage() {
                       Type
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">
+                      Relationship
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">
                       Brands
                     </th>
                     <th className="text-right px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">
@@ -411,6 +432,17 @@ export default function DataIntegrationsPage() {
                           }`}
                         >
                           {row.type === "online" ? "Online" : "Offline"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            row.relationship === "direct"
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-grey-100 text-grey-600"
+                          }`}
+                        >
+                          {row.relationship === "direct" ? "Direct" : "Third-party"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-grey-600 max-w-xs">
