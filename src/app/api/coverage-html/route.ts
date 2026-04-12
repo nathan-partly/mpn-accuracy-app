@@ -278,30 +278,73 @@ function trendChartHtml(): string {
 </script>`;
 }
 
-// ── Integration counts column injected into the brand table ──────────────────
-// Wraps the existing renderTable() function (defined in the stored HTML) so the
-// count column is re-injected after every re-render (tab change, sort, filter).
-// Only counts live integrations (integration_date <= today).
-// Matches brands by normalising to uppercase alphanumeric — same logic as DB.
+// ── Integration counts column + drill drawer details ─────────────────────────
+// Wraps the existing renderTable() so counts and drawer content re-inject after
+// every re-render (tab change, sort, filter). Only counts live integrations.
+// Matches brands by normalising to uppercase alphanumeric (same as DB).
 function integrationCountsHtml(): string {
   return `
 <style>
   .brand-table colgroup col.c-integ { width: 110px }
-  td.integ-cell { text-align: right; padding-right: 12px !important }
-  th.th-integ   { text-align: right; padding-right: 12px !important }
+  td.integ-cell  { text-align: right; padding-right: 12px !important }
+  th.th-integ    { text-align: right; padding-right: 12px !important }
+  .drill-integ-section {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #F0F0F5;
+  }
+  .drill-integ-hdr {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: #6B7280; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .drill-integ-cards {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .drill-integ-card {
+    display: flex; flex-direction: column; gap: 4px;
+    background: #F8F9FF; border: 1px solid #E8EAFF;
+    border-radius: 8px; padding: 10px 14px; min-width: 180px;
+  }
+  .dic-name {
+    font-size: 12px; font-weight: 700; color: #0A0A0A;
+  }
+  .dic-badges {
+    display: flex; gap: 5px; flex-wrap: wrap;
+  }
+  .dic-badge {
+    display: inline-flex; align-items: center;
+    border-radius: 10px; padding: 1px 7px;
+    font-size: 10px; font-weight: 700; letter-spacing: .03em;
+  }
+  .dic-badge.online   { background: #DBEAFE; color: #1D4ED8; }
+  .dic-badge.offline  { background: #D1FAE5; color: #065F46; }
+  .dic-badge.direct   { background: #EDE9FE; color: #6D28D9; }
+  .dic-badge.tparty   { background: #F3F4F6; color: #4B5563; }
+  .dic-date {
+    font-size: 10px; color: #9CA3AF;
+  }
+  .drill-integ-none {
+    font-size: 12px; color: #9CA3AF; font-style: italic;
+  }
 </style>
 <script>
 (function () {
-  var _intMap = {};  /* norm(brand) → count of live integrations */
-  var _ready  = false;
+  var _intMap     = {};  /* norm(brand) → count */
+  var _intDetails = {};  /* norm(brand) → [{name,type,relationship,integration_date}] */
+  var _ready      = false;
 
   function norm(s) {
     return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   }
 
-  /* ── patch the static table structure once ── */
+  function fmtDate(iso) {
+    var d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+  }
+
+  /* ── patch static table structure (colgroup + thead) once ── */
   function patchStructure() {
-    /* colgroup: insert c-integ before c-exp */
     var cg = document.querySelector('.brand-table colgroup');
     if (cg && !cg.querySelector('.c-integ')) {
       var col = document.createElement('col');
@@ -309,7 +352,6 @@ function integrationCountsHtml(): string {
       var expCol = cg.querySelector('.c-exp');
       if (expCol) cg.insertBefore(col, expCol);
     }
-    /* thead: insert th before last th */
     var headRow = document.querySelector('.brand-table thead tr');
     if (headRow && !headRow.querySelector('.th-integ')) {
       var th = document.createElement('th');
@@ -320,30 +362,70 @@ function integrationCountsHtml(): string {
     }
   }
 
-  /* ── inject count cells into rendered brand rows ── */
+  /* ── build the integration cards HTML for a brand ── */
+  function integCardsHtml(key) {
+    var list = _intDetails[key] || [];
+    if (list.length === 0) {
+      return '<span class="drill-integ-none">No data integrations for this brand</span>';
+    }
+    return list.map(function (integ) {
+      var typeBadge = integ.type === 'online'
+        ? '<span class="dic-badge online">Online</span>'
+        : '<span class="dic-badge offline">Offline</span>';
+      var relBadge  = integ.relationship === 'direct'
+        ? '<span class="dic-badge direct">Direct</span>'
+        : '<span class="dic-badge tparty">Third-party</span>';
+      return '<div class="drill-integ-card">'
+        + '<span class="dic-name">' + integ.name + '</span>'
+        + '<div class="dic-badges">' + typeBadge + relBadge + '</div>'
+        + '<span class="dic-date">' + fmtDate(integ.integration_date) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  /* ── inject count cells + drill section into rendered rows ── */
   function injectCells() {
-    /* fix no-data / drill colspan 7 → 8 */
+    /* fix colspan 7 → 8 for drill-rows and no-data rows */
     document.querySelectorAll('.brand-table td[colspan="7"]').forEach(function (td) {
       td.setAttribute('colspan', '8');
     });
-    /* inject into each brand-row that hasn't been stamped yet */
+
     document.querySelectorAll('.brand-row').forEach(function (row) {
-      if (row.querySelector('.integ-cell')) return;
       var nameCell = row.querySelector('.name-cell');
       if (!nameCell) return;
-      var key   = norm(nameCell.textContent);
-      var count = _intMap[key] || 0;
-      var td    = document.createElement('td');
-      td.className = 'data-cell integ-cell';
-      if (count > 0) {
-        td.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;'
-          + 'background:#EEF2FF;color:#3632FF;border-radius:12px;padding:2px 10px;'
-          + 'font-size:11px;font-weight:700;letter-spacing:.02em">' + count + '</span>';
-      } else {
-        td.innerHTML = '<span style="color:#D1D5DB;font-size:11px">—</span>';
+      var key = norm(nameCell.textContent);
+
+      /* ── count cell ── */
+      if (!row.querySelector('.integ-cell')) {
+        var count = _intMap[key] || 0;
+        var td    = document.createElement('td');
+        td.className = 'data-cell integ-cell';
+        td.innerHTML = count > 0
+          ? '<span style="display:inline-flex;align-items:center;justify-content:center;'
+            + 'background:#EEF2FF;color:#3632FF;border-radius:12px;padding:2px 10px;'
+            + 'font-size:11px;font-weight:700;letter-spacing:.02em">' + count + '</span>'
+          : '<span style="color:#D1D5DB;font-size:11px">—</span>';
+        var expCell = row.querySelector('.exp-cell');
+        if (expCell) row.insertBefore(td, expCell);
       }
-      var expCell = row.querySelector('.exp-cell');
-      if (expCell) row.insertBefore(td, expCell);
+
+      /* ── drill drawer integrations section ── */
+      var rowId  = row.id;                          /* brow_uid */
+      var uid    = rowId ? rowId.replace('brow_', '') : null;
+      if (!uid) return;
+      var drillRow = document.getElementById('drill_' + uid);
+      if (!drillRow) return;
+      var inner = drillRow.querySelector('.drill-inner');
+      if (!inner || inner.querySelector('.drill-integ-section')) return;
+
+      var section = document.createElement('div');
+      section.className = 'drill-integ-section';
+      section.innerHTML = '<div class="drill-integ-hdr">'
+        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2.5">'
+        + '<path d="M4 6h16M4 10h16M4 14h10"/></svg>'
+        + 'Data Integrations</div>'
+        + '<div class="drill-integ-cards">' + integCardsHtml(key) + '</div>';
+      inner.appendChild(section);
     });
   }
 
@@ -355,31 +437,39 @@ function integrationCountsHtml(): string {
       _orig(brands);
       injectCells();
     };
-    /* patch structure now (thead / colgroup are static) */
     patchStructure();
-    /* inject into whatever is already rendered */
     if (_ready) injectCells();
   }
 
-  /* ── fetch live integrations and build brand map ── */
+  /* ── fetch integrations, build maps, inject ── */
   fetch('/api/data-integrations')
     .then(function (r) { return r.json(); })
     .then(function (data) {
       if (!Array.isArray(data)) return;
-      var today = new Date().toISOString().split('T')[0];
-      var map   = {};
+      var today   = new Date().toISOString().split('T')[0];
+      var countMap  = {};
+      var detailMap = {};
       data.forEach(function (integ) {
         if (!integ.integration_date || integ.integration_date > today) return;
         (integ.brands || []).forEach(function (brand) {
           var key = norm(brand);
-          if (key) map[key] = (map[key] || 0) + 1;
+          if (!key) return;
+          countMap[key]  = (countMap[key]  || 0) + 1;
+          if (!detailMap[key]) detailMap[key] = [];
+          detailMap[key].push({
+            name:             integ.name,
+            type:             integ.type,
+            relationship:     integ.relationship || 'third-party',
+            integration_date: integ.integration_date
+          });
         });
       });
-      _intMap = map;
-      _ready  = true;
+      _intMap     = countMap;
+      _intDetails = detailMap;
+      _ready      = true;
       injectCells();
     })
-    .catch(function () { /* silently ignore — column stays blank */ });
+    .catch(function () { /* silently ignore */ });
 
   hookRenderTable();
 })();
