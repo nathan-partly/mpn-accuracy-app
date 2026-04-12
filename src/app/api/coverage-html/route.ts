@@ -278,12 +278,128 @@ function trendChartHtml(): string {
 </script>`;
 }
 
+// ── Integration counts column injected into the brand table ──────────────────
+// Wraps the existing renderTable() function (defined in the stored HTML) so the
+// count column is re-injected after every re-render (tab change, sort, filter).
+// Only counts live integrations (integration_date <= today).
+// Matches brands by normalising to uppercase alphanumeric — same logic as DB.
+function integrationCountsHtml(): string {
+  return `
+<style>
+  .brand-table colgroup col.c-integ { width: 110px }
+  td.integ-cell { text-align: right; padding-right: 12px !important }
+  th.th-integ   { text-align: right; padding-right: 12px !important }
+</style>
+<script>
+(function () {
+  var _intMap = {};  /* norm(brand) → count of live integrations */
+  var _ready  = false;
+
+  function norm(s) {
+    return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  }
+
+  /* ── patch the static table structure once ── */
+  function patchStructure() {
+    /* colgroup: insert c-integ before c-exp */
+    var cg = document.querySelector('.brand-table colgroup');
+    if (cg && !cg.querySelector('.c-integ')) {
+      var col = document.createElement('col');
+      col.className = 'c-integ';
+      var expCol = cg.querySelector('.c-exp');
+      if (expCol) cg.insertBefore(col, expCol);
+    }
+    /* thead: insert th before last th */
+    var headRow = document.querySelector('.brand-table thead tr');
+    if (headRow && !headRow.querySelector('.th-integ')) {
+      var th = document.createElement('th');
+      th.className = 'th-integ r-right';
+      th.textContent = 'Integrations';
+      var ths = headRow.querySelectorAll('th');
+      if (ths.length) headRow.insertBefore(th, ths[ths.length - 1]);
+    }
+  }
+
+  /* ── inject count cells into rendered brand rows ── */
+  function injectCells() {
+    /* fix no-data / drill colspan 7 → 8 */
+    document.querySelectorAll('.brand-table td[colspan="7"]').forEach(function (td) {
+      td.setAttribute('colspan', '8');
+    });
+    /* inject into each brand-row that hasn't been stamped yet */
+    document.querySelectorAll('.brand-row').forEach(function (row) {
+      if (row.querySelector('.integ-cell')) return;
+      var nameCell = row.querySelector('.name-cell');
+      if (!nameCell) return;
+      var key   = norm(nameCell.textContent);
+      var count = _intMap[key] || 0;
+      var td    = document.createElement('td');
+      td.className = 'data-cell integ-cell';
+      if (count > 0) {
+        td.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;'
+          + 'background:#EEF2FF;color:#3632FF;border-radius:12px;padding:2px 10px;'
+          + 'font-size:11px;font-weight:700;letter-spacing:.02em">' + count + '</span>';
+      } else {
+        td.innerHTML = '<span style="color:#D1D5DB;font-size:11px">—</span>';
+      }
+      var expCell = row.querySelector('.exp-cell');
+      if (expCell) row.insertBefore(td, expCell);
+    });
+  }
+
+  /* ── wrap renderTable so we re-inject after every render ── */
+  function hookRenderTable() {
+    if (typeof renderTable === 'undefined') { setTimeout(hookRenderTable, 80); return; }
+    var _orig = renderTable;
+    renderTable = function (brands) {
+      _orig(brands);
+      injectCells();
+    };
+    /* patch structure now (thead / colgroup are static) */
+    patchStructure();
+    /* inject into whatever is already rendered */
+    if (_ready) injectCells();
+  }
+
+  /* ── fetch live integrations and build brand map ── */
+  fetch('/api/data-integrations')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!Array.isArray(data)) return;
+      var today = new Date().toISOString().split('T')[0];
+      var map   = {};
+      data.forEach(function (integ) {
+        if (!integ.integration_date || integ.integration_date > today) return;
+        (integ.brands || []).forEach(function (brand) {
+          var key = norm(brand);
+          if (key) map[key] = (map[key] || 0) + 1;
+        });
+      });
+      _intMap = map;
+      _ready  = true;
+      injectCells();
+    })
+    .catch(function () { /* silently ignore — column stays blank */ });
+
+  hookRenderTable();
+})();
+<\/script>`;
+}
+
 // ── Inject the trend chart before the KPI cards ───────────────────────────────
 function injectTrendChart(html: string): string {
   const MARKER = '<div class="kpis" id="kpis">';
   const idx = html.indexOf(MARKER);
   if (idx === -1) return html;
   return html.slice(0, idx) + trendChartHtml() + "\n" + html.slice(idx);
+}
+
+// ── Inject integration counts before </body> ──────────────────────────────────
+function injectIntegrationCounts(html: string): string {
+  const MARKER = '</body>';
+  const idx = html.lastIndexOf(MARKER);
+  if (idx === -1) return html;
+  return html.slice(0, idx) + integrationCountsHtml() + "\n" + html.slice(idx);
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -308,7 +424,7 @@ export async function GET() {
     }
   }
 
-  return new NextResponse(injectTrendChart(html), {
+  return new NextResponse(injectIntegrationCounts(injectTrendChart(html)), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
