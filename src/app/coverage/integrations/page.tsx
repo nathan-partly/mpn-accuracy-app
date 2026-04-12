@@ -394,6 +394,7 @@ export default function DataIntegrationsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-grey-100 bg-grey-50">
+                    <th className="pl-4 pr-2 py-3 text-xs font-semibold text-grey-300 uppercase tracking-wider text-right w-8">#</th>
                     <SortTh label="Integration" col="name" sort={sort} onSort={handleSort} />
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Type</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Relationship</th>
@@ -407,6 +408,7 @@ export default function DataIntegrationsPage() {
                 <tbody>
                   {filtered.map((row, idx) => (
                     <tr key={row.id} className={`border-b border-grey-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-grey-50/40"} hover:bg-blue-50/30 transition-colors`}>
+                      <td className="pl-4 pr-2 py-3 text-xs font-mono text-grey-300 text-right tabular-nums">{idx + 1}</td>
                       <td className="px-4 py-3 font-medium text-grey-950 whitespace-nowrap">{row.name}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${row.type === "online" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
@@ -429,11 +431,13 @@ export default function DataIntegrationsPage() {
                           ? <span className="text-brand-blue">+{row.incremental_vio_pct.toFixed(1)}%</span>
                           : <span className="text-grey-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-grey-700 whitespace-nowrap">
-                        {fmtDate(row.integration_date)}
-                        {isFuture(row.integration_date) && (
-                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">TARGET</span>
-                        )}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-grey-700">{fmtDate(row.integration_date)}</span>
+                          {isFuture(row.integration_date) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">TARGET</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {deleteConfirm === row.id ? (
