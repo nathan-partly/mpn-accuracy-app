@@ -95,18 +95,40 @@ export default async function DashboardPage() {
           <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
             <div className="h-1 bg-brand-blue" />
             <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-grey-100 bg-grey-50">
+                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-grey-300 uppercase tracking-wider w-12">Rank</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-grey-400 uppercase tracking-wider">Brand</th>
+                  <th className="text-right px-5 py-2.5 text-xs font-semibold text-grey-400 uppercase tracking-wider">Global VIO %</th>
+                  <th className="px-5 py-2.5" />
+                  <th className="px-5 py-2.5" />
+                </tr>
+              </thead>
               <tbody>
-                {pending.map((brand, i) => (
+                {pending
+                  .slice()
+                  .sort((a, b) => {
+                    // Sort by VIO rank asc (ranked brands first), then alphabetically
+                    if (a.vio_rank != null && b.vio_rank != null) return Number(a.vio_rank) - Number(b.vio_rank);
+                    if (a.vio_rank != null) return -1;
+                    if (b.vio_rank != null) return 1;
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map((brand, i, arr) => (
                   <tr
                     key={brand.id}
-                    className={
-                      i !== pending.length - 1
-                        ? "border-b border-grey-100"
-                        : ""
-                    }
+                    className={i !== arr.length - 1 ? "border-b border-grey-100" : ""}
                   >
+                    <td className="px-5 py-3 text-right font-mono text-xs text-grey-300 tabular-nums">
+                      {brand.vio_rank ?? <span className="text-grey-200">—</span>}
+                    </td>
                     <td className="px-5 py-3 font-medium text-grey-900">
                       {brand.name}
+                    </td>
+                    <td className="px-5 py-3 text-right font-mono text-grey-500 tabular-nums">
+                      {brand.vio_combined_pct != null
+                        ? `${Number(brand.vio_combined_pct).toFixed(2)}%`
+                        : <span className="text-grey-200">—</span>}
                     </td>
                     <td className="px-5 py-3">
                       <span className="text-xs text-grey-400 bg-grey-50 border border-grey-100 px-2 py-0.5 rounded">
