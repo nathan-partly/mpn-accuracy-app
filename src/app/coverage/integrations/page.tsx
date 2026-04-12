@@ -147,9 +147,9 @@ export default function DataIntegrationsPage() {
   const totalIncremental = integrations
     .filter((i) => !isFuture(i.integration_date))
     .reduce((sum, i) => sum + (i.incremental_vio_pct ?? 0), 0);
-  const offlineIncremental = integrations
+  const offlineTotalVio = integrations
     .filter((i) => i.type === "offline" && !isFuture(i.integration_date))
-    .reduce((sum, i) => sum + (i.incremental_vio_pct ?? 0), 0);
+    .reduce((sum, i) => sum + (i.total_vio_pct ?? 0), 0);
   const projectedTotal = integrations
     .reduce((sum, i) => sum + (i.incremental_vio_pct ?? 0), 0);
 
@@ -197,7 +197,7 @@ export default function DataIntegrationsPage() {
             </div>
             <div className="bg-white rounded-xl border border-grey-100 p-4">
               <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">Offline Coverage</p>
-              <p className="text-2xl font-bold text-grey-950">{offlineIncremental.toFixed(1)}%</p>
+              <p className="text-2xl font-bold text-grey-950">{offlineTotalVio.toFixed(1)}%</p>
               <p className="text-xs text-grey-400 mt-0.5">from offline integrations</p>
             </div>
             <div className="bg-white rounded-xl border border-grey-100 p-4">
