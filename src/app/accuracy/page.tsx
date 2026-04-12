@@ -10,6 +10,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { AccuracyBadge } from "@/components/AccuracyBadge";
 import { AccuracyBrandsTable } from "@/components/AccuracyBrandsTable";
 import { AccuracySnapshotHistory } from "@/components/AccuracySnapshotHistory";
+import { SyncCoverageButton } from "@/components/SyncCoverageButton";
 import { accuracyPct } from "@/lib/utils";
 import type { GlobalProviderStat } from "@/types";
 
@@ -41,15 +42,18 @@ export default async function DashboardPage() {
             MPN accuracy validation across all benchmarked brands · {benchmarked.length} benchmarked · {pending.length} pending
           </p>
         </div>
-        <Link
-          href="/upload"
-          className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New Snapshot
-        </Link>
+        <div className="flex items-start gap-3">
+          <SyncCoverageButton />
+          <Link
+            href="/upload"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New Snapshot
+          </Link>
+        </div>
       </div>
 
       {/* KPI cards */}
