@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { updateSnapshotStats } from "@/lib/queries";
 
+export const dynamic = "force-dynamic";
+
 // Manual single-record addition
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);

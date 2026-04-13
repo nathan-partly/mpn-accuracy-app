@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }

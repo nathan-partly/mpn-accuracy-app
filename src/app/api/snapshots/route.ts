@@ -6,6 +6,8 @@ import {
   insertRecords,
   updateSnapshotStats,
 } from "@/lib/queries";
+
+export const dynamic = "force-dynamic";
 import { sql } from "@/lib/db";
 
 export async function POST(req: Request) {
