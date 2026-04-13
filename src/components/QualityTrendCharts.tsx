@@ -78,6 +78,7 @@ function CustomTooltip({
 // ─── Legend ───────────────────────────────────────────────────────────────────
 function BrandLegend({
   brands,
+  allBrands,
   colorMap,
   visibleBrands,
   hoveredBrand,
@@ -85,8 +86,11 @@ function BrandLegend({
   onHover,
   showAll,
   onToggleShowAll,
+  onSelectAll,
+  onDeselectAll,
 }: {
   brands: string[];
+  allBrands: string[];
   colorMap: Map<string, string>;
   visibleBrands: Set<string>;
   hoveredBrand: string | null;
@@ -94,9 +98,35 @@ function BrandLegend({
   onHover: (brand: string | null) => void;
   showAll: boolean;
   onToggleShowAll: () => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
 }) {
+  const allOn  = allBrands.every((b) => visibleBrands.has(b));
+  const noneOn = allBrands.every((b) => !visibleBrands.has(b));
+
   return (
     <div className="px-5 pb-4">
+      {/* Select / deselect all controls */}
+      <div className="flex items-center gap-2 mb-2">
+        <button
+          onClick={onSelectAll}
+          disabled={allOn}
+          className="text-xs font-semibold text-brand-blue hover:underline disabled:text-grey-300 disabled:no-underline transition-colors"
+        >
+          Select all
+        </button>
+        <span className="text-grey-200 text-xs">|</span>
+        <button
+          onClick={onDeselectAll}
+          disabled={noneOn}
+          className="text-xs font-semibold text-grey-400 hover:text-grey-700 hover:underline disabled:text-grey-200 disabled:no-underline transition-colors"
+        >
+          Deselect all
+        </button>
+        <span className="text-xs text-grey-300 ml-1">
+          {visibleBrands.size} / {allBrands.length} shown
+        </span>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {brands.map((brand) => {
           const color = colorMap.get(brand) ?? "#ccc";
@@ -131,7 +161,7 @@ function BrandLegend({
           onClick={onToggleShowAll}
           className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border border-grey-200 text-grey-500 hover:border-grey-400 hover:text-grey-700 transition-colors cursor-pointer"
         >
-          {showAll ? "Collapse" : `+${brands.length - TOP_N} more`}
+          {showAll ? "Collapse" : `+${allBrands.length - TOP_N} more`}
         </button>
       </div>
     </div>
@@ -188,6 +218,11 @@ export function QualityTrendCharts({ rows }: Props) {
       });
     };
 
+  const makeSelectAll   = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
+    () => setter(new Set(allBrands));
+  const makeDeselectAll = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) =>
+    () => setter(new Set());
+
   const buildData = (key: "classification_pct" | "annotation_pct"): ChartDataPoint[] =>
     dates.map((date) => {
       const point: ChartDataPoint = { date };
@@ -205,7 +240,9 @@ export function QualityTrendCharts({ rows }: Props) {
     data: ChartDataPoint[],
     title: string,
     visibleBrands: Set<string>,
-    onToggle: (brand: string) => void
+    onToggle: (brand: string) => void,
+    onSelectAll: () => void,
+    onDeselectAll: () => void,
   ) => (
     <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
       <div className="h-1 bg-brand-blue" />
@@ -257,6 +294,7 @@ export function QualityTrendCharts({ rows }: Props) {
       </div>
       <BrandLegend
         brands={visibleBrandList}
+        allBrands={allBrands}
         colorMap={colorMap}
         visibleBrands={visibleBrands}
         hoveredBrand={hoveredBrand}
@@ -272,14 +310,16 @@ export function QualityTrendCharts({ rows }: Props) {
             setAnnotVisible((prev) => new Set(Array.from(prev).concat(newBrands)));
           }
         }}
+        onSelectAll={onSelectAll}
+        onDeselectAll={onDeselectAll}
       />
     </div>
   );
 
   return (
     <>
-      {renderChart(classificationData, "Classification Coverage Over Time", classVisible, makeToggle(setClassVisible))}
-      {renderChart(annotationData, "Annotation Coverage Over Time", annotVisible, makeToggle(setAnnotVisible))}
+      {renderChart(classificationData, "Classification Coverage Over Time", classVisible, makeToggle(setClassVisible), makeSelectAll(setClassVisible), makeDeselectAll(setClassVisible))}
+      {renderChart(annotationData, "Annotation Coverage Over Time", annotVisible, makeToggle(setAnnotVisible), makeSelectAll(setAnnotVisible), makeDeselectAll(setAnnotVisible))}
     </>
   );
 }
