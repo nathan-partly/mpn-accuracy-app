@@ -543,7 +543,7 @@ export async function getLatestQualitySnapshot(): Promise<{ snapshot: QualitySna
     SELECT id, snapshot_date, notes, uploaded_by, created_at,
       (SELECT COUNT(*) FROM quality_brand_data WHERE snapshot_id = qs.id) AS brand_count
     FROM quality_snapshots qs
-    ORDER BY snapshot_date DESC
+    ORDER BY snapshot_date DESC, created_at DESC
     LIMIT 1
   `;
   if (snapshots.length === 0) return null;
@@ -714,15 +714,23 @@ export async function createQualitySnapshot(
 // ─── Quality trend (all brands across all snapshots) ─────────────────────────
 
 export async function getQualityTrendAllBrands(): Promise<QualityTrendRow[]> {
+  // When multiple snapshots share the same date, use only the most recently
+  // created one (highest created_at) so the trend line reflects the latest upload.
   const rows = await sql`
+    WITH latest_per_date AS (
+      SELECT DISTINCT ON (snapshot_date)
+        id, snapshot_date
+      FROM quality_snapshots
+      ORDER BY snapshot_date, created_at DESC
+    )
     SELECT
-      qs.snapshot_date::text AS snapshot_date,
+      lpd.snapshot_date::text AS snapshot_date,
       qb.brand,
       qb.classification_pct,
       qb.annotation_pct
     FROM quality_brand_data qb
-    JOIN quality_snapshots qs ON qs.id = qb.snapshot_id
-    ORDER BY qs.snapshot_date ASC, qb.brand ASC
+    JOIN latest_per_date lpd ON lpd.id = qb.snapshot_id
+    ORDER BY lpd.snapshot_date ASC, qb.brand ASC
   `;
   return rows as QualityTrendRow[];
 }
