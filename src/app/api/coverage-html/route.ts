@@ -116,6 +116,17 @@ function trendChartHtml(): string {
     var labels = Object.keys(dateSet).sort();
     var dispLabels = labels.map(fmtShort);
 
+    /* date → integration name(s) lookup for tooltip */
+    var dateToNames = {};
+    sorted.forEach(function(integ) {
+      var d = integ.integration_date;
+      if (!dateToNames[d]) dateToNames[d] = [];
+      dateToNames[d].push(integ.name);
+    });
+    /* dispLabel → ISO date (needed inside Chart.js callback which only sees dispLabel) */
+    var dispToISO = {};
+    labels.forEach(function(iso, i) { dispToISO[dispLabels[i]] = iso; });
+
     /* align series to labels */
     function toMap(pts, key) {
       var m = {};
@@ -232,12 +243,22 @@ function trendChartHtml(): string {
             borderWidth: 1,
             titleColor: '#1F1F1F',
             bodyColor: '#6B7280',
+            footerColor: '#3632FF',
             titleFont: { family: 'Inter,sans-serif', size: 12, weight: 'bold' },
             bodyFont: { family: 'Inter,sans-serif', size: 11 },
+            footerFont: { family: 'Inter,sans-serif', size: 11, weight: '600' },
+            footerMarginTop: 6,
             callbacks: {
               label: function(c) {
                 if (c.raw == null) return null;
                 return c.dataset.label + ': ' + Number(c.raw).toFixed(1) + '%';
+              },
+              footer: function(items) {
+                if (!items.length) return '';
+                var iso = dispToISO[items[0].label];
+                var names = iso && dateToNames[iso];
+                if (!names || !names.length) return '';
+                return (names.length === 1 ? '\u2192 ' : '\u2192 ') + names.join(', ');
               }
             }
           }
