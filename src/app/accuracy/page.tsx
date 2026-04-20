@@ -63,7 +63,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
         <KpiCard
           label="Overall Accuracy"
           value={`${Number(stats?.overall_accuracy_pct ?? 0).toFixed(2)}%`}
@@ -79,11 +79,6 @@ export default async function DashboardPage() {
           label="≥ 99% (sig.)"
           value={highAccuracySig}
           sub="≥50 VINs · ≥500 parts"
-        />
-        <KpiCard
-          label="Brands Benchmarked"
-          value={benchmarked.length}
-          sub={`${pending.length} pending`}
         />
         <KpiCard
           label="VINs Checked"
