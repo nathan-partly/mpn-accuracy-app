@@ -24,8 +24,9 @@ export default async function DashboardPage() {
     getAccuracySnapshotHistory(),
   ]);
 
-  const benchmarked = brands.filter((b) => b.latest_snapshot_date);
-  const pending     = brands.filter((b) => !b.latest_snapshot_date);
+  const benchmarked   = brands.filter((b) => b.latest_snapshot_date);
+  const pending       = brands.filter((b) => !b.latest_snapshot_date);
+  const highAccuracy  = benchmarked.filter((b) => Number(b.latest_accuracy_pct ?? 0) >= 99).length;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -57,12 +58,17 @@ export default async function DashboardPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
         <KpiCard
           label="Overall Accuracy"
           value={`${Number(stats?.overall_accuracy_pct ?? 0).toFixed(2)}%`}
           sub={`${stats?.valid_count ?? 0} valid / ${stats?.invalid_count ?? 0} invalid`}
           highlight
+        />
+        <KpiCard
+          label="Brands ≥ 99%"
+          value={highAccuracy}
+          sub={`of ${benchmarked.length} benchmarked`}
         />
         <KpiCard
           label="Brands Benchmarked"
