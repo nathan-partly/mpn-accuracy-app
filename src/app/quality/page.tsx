@@ -116,7 +116,6 @@ export default async function QualityPage() {
                   <li>Diagram cleanup complete (symbols, watermarks, boxes removed)</li>
                   <li>Titles &amp; part descriptions rephrased</li>
                   <li>Irrelevant diagrams removed</li>
-                  <li>Accuracy verified via EPC benchmarking</li>
                   <li>Part variant disambiguation ≥ OEM EPC quality</li>
                 </ul>
               </div>
