@@ -103,11 +103,51 @@ export default async function QualityPage() {
       {/* Level thresholds legend */}
       <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
         <div className="h-1 bg-brand-blue" />
-        <div className="px-5 py-4 flex flex-wrap gap-6 text-xs text-grey-500">
-          <span className="flex items-center gap-1.5"><span className="font-bold text-brand-blue">L2</span>≥80% classification + ≥80% annotation + all quality gates</span>
-          <span className="flex items-center gap-1.5"><span className="font-bold text-emerald-700">L1</span>≥20% classification + ≥20% annotation + diagram style</span>
-          <span className="flex items-center gap-1.5"><span className="font-bold text-amber-600">L0</span>Below L1 threshold</span>
-          <span className="ml-auto text-grey-400">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US</span>
+        <div className="px-5 py-4 text-xs text-grey-500">
+          <div className="flex flex-wrap gap-x-8 gap-y-3">
+            {/* L2 */}
+            <div className="flex gap-2 min-w-48">
+              <span className="font-bold text-brand-blue mt-0.5 shrink-0">L2</span>
+              <div>
+                <p className="font-semibold text-grey-700 mb-0.5">High-quality production support</p>
+                <ul className="space-y-0.5 text-grey-400">
+                  <li>≥80% of parts classified as HCAs</li>
+                  <li>≥80% of diagrams annotated</li>
+                  <li>Diagram cleanup complete (symbols, watermarks, boxes removed)</li>
+                  <li>Titles &amp; part descriptions rephrased</li>
+                  <li>Irrelevant diagrams removed</li>
+                  <li>Accuracy verified via EPC benchmarking</li>
+                  <li>Part variant disambiguation ≥ OEM EPC quality</li>
+                </ul>
+              </div>
+            </div>
+            {/* L1 */}
+            <div className="flex gap-2 min-w-48">
+              <span className="font-bold text-emerald-700 mt-0.5 shrink-0">L1</span>
+              <div>
+                <p className="font-semibold text-grey-700 mb-0.5">Passable production support</p>
+                <ul className="space-y-0.5 text-grey-400">
+                  <li>≥20% of parts classified as HCAs</li>
+                  <li>≥20% of diagrams annotated</li>
+                  <li>All diagrams redrawn in Partly diagram style</li>
+                  <li>Part variant disambiguation limited (may return multiple parts)</li>
+                </ul>
+              </div>
+            </div>
+            {/* L0 */}
+            <div className="flex gap-2 min-w-40">
+              <span className="font-bold text-amber-600 mt-0.5 shrink-0">L0</span>
+              <div>
+                <p className="font-semibold text-grey-700 mb-0.5">Not ready for production</p>
+                <ul className="space-y-0.5 text-grey-400">
+                  <li>EPC data integrated but incomplete or untested</li>
+                  <li>Diagrams may be unprocessed or partially processed</li>
+                  <li>Below minimum threshold for production use</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <p className="text-grey-300 mt-3 text-right">Ranked by VIO market share · VIO % = avg across NZ+UK+AU+US</p>
         </div>
       </div>
 
