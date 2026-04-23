@@ -18,6 +18,7 @@ import { ExpandableModelTable } from "@/components/ExpandableModelTable";
 import { DeleteSnapshotButton } from "@/components/DeleteSnapshotButton";
 import { SnapshotDiffPanel } from "@/components/SnapshotDiffPanel";
 import { formatDate, formatPct, accuracyPct } from "@/lib/utils";
+import { getBlockRulesForBrand } from "@/lib/blockRules";
 
 export const dynamic = "force-dynamic"; // always fetch fresh data
 
@@ -77,6 +78,8 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
   const prevHcaMap = new Map(
     prevPartTypeBreakdown.map((r) => [r.part_type, Number(r.accuracy_pct)])
   );
+
+  const blockRules = getBlockRulesForBrand(brand.name);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
@@ -335,6 +338,37 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
             </table>
           </div>
         </div>
+      )}
+
+      {/* VIN Block Rules */}
+      {blockRules.length > 0 && (
+        <section className="mt-8 mb-2">
+          <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-3">
+            VIN Filtering Rules
+          </h2>
+          <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
+            <div className="h-1 bg-amber-400" />
+            <div className="px-5 py-4">
+              <p className="text-xs text-grey-400 mb-4">
+                The following rules filter out certain VINs before querying upstream EPC providers.
+                These vehicles are excluded from benchmarking samples.
+              </p>
+              <div className="divide-y divide-grey-100">
+                {blockRules.map((rule, i) => (
+                  <div key={i} className="py-3 flex gap-4">
+                    <span className="inline-flex items-center shrink-0 px-2 py-0.5 rounded text-xs font-semibold bg-grey-100 text-grey-600 h-fit mt-0.5 whitespace-nowrap">
+                      {rule.provider}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-grey-900">{rule.rule}</p>
+                      <p className="text-xs text-grey-400 mt-0.5">{rule.reason}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
     </div>

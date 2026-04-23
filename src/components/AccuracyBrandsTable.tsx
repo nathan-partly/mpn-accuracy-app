@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { AccuracyBadge } from "@/components/AccuracyBadge";
 import { formatDate, accuracyPct } from "@/lib/utils";
+import { getBlockRulesForBrand } from "@/lib/blockRules";
 import type { Brand } from "@/types";
 
 // ─── Sort helpers ─────────────────────────────────────────────────────────────
@@ -145,7 +146,19 @@ export function AccuracyBrandsTable({ brands }: { brands: Brand[] }) {
                   <td className="px-5 py-3.5 text-grey-400 text-xs tabular-nums text-center">
                     {brand.vio_rank ?? "—"}
                   </td>
-                  <td className="px-5 py-3.5 font-semibold text-grey-950">{brand.name}</td>
+                  <td className="px-5 py-3.5 font-semibold text-grey-950">
+                    <span className="flex items-center gap-2">
+                      {brand.name}
+                      {getBlockRulesForBrand(brand.name).length > 0 && (
+                        <span
+                          title="This brand has active VIN filtering rules — click View to see details"
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 cursor-default"
+                        >
+                          Filtered
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-5 py-3.5 text-right text-grey-700 tabular-nums font-medium text-xs">
                     {brand.vio_combined_pct != null
                       ? `${(Number(brand.vio_combined_pct) / 4).toFixed(2)}%`
