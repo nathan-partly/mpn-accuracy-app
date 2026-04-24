@@ -49,18 +49,30 @@ export function AccuracyChart({ data }: Props) {
     total: d.total_parts,
   }));
 
+  // Y-axis: floor is 2 points below the minimum value, rounded down to nearest integer,
+  // but never below 0. This keeps the chart tight regardless of how many snapshots exist.
+  const minAccuracy = Math.min(...chartData.map((d) => d.accuracy));
+  const yMin = Math.max(0, Math.floor(minAccuracy - 2));
+
+  // X-axis: cap tick count so labels don't crowd as snapshots accumulate
+  const maxTicks = 6;
+  const tickInterval = chartData.length > maxTicks
+    ? Math.ceil(chartData.length / maxTicks)
+    : 0;
+
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+      <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
         <CartesianGrid stroke="#E5E7EB" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="date"
           tick={{ fontSize: 11, fill: "#6B7280" }}
           axisLine={false}
           tickLine={false}
+          interval={tickInterval}
         />
         <YAxis
-          domain={["auto", 100]}
+          domain={[yMin, 100]}
           tick={{ fontSize: 11, fill: "#6B7280" }}
           axisLine={false}
           tickLine={false}
