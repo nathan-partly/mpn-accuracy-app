@@ -140,13 +140,13 @@ export default async function BrandDetailPage({ params, searchParams }: Props) {
         </div>
 
         {/* Snapshot selector */}
-        <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden self-start">
           <div className="h-1 bg-brand-blue" />
           <div className="p-5">
             <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-4">
               Snapshots
             </p>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
               {snapshots.map((s) => (                <div key={s.id} className="relative group">
                   <Link
                     href={`/brands/${brand.id}?snapshot=${s.id}`}
