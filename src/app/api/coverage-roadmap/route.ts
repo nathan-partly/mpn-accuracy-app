@@ -60,7 +60,7 @@ function regionKey(market: Market): string {
     case "uk": return "UK";
     case "au": return "AU";
     case "us": return "US";
-    default:   return "NZ"; // "All" defaults to NZ snapshot
+    default:   return "ALL"; // combined across all regions
   }
 }
 
@@ -79,7 +79,8 @@ export async function GET(req: Request): Promise<NextResponse> {
         Array<{ make: string; yv: string[]; nv: string[] }>
       >;
       const key = regionKey(market);
-      const regionBrands = parsed[key] ?? parsed[key.toLowerCase()] ?? [];
+      // Fall back to NZ if the requested region key isn't in this snapshot
+      const regionBrands = parsed[key] ?? parsed[key.toLowerCase()] ?? parsed["NZ"] ?? parsed["nz"] ?? [];
       for (const entry of regionBrands) {
         const total = (entry.yv?.length ?? 0) + (entry.nv?.length ?? 0);
         const pct = total > 0 ? (entry.yv.length / total) * 100 : 0;
