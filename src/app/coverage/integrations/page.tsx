@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
-import type { RoadmapResponse } from "@/app/api/coverage-roadmap/route";
 
 interface DataIntegration {
   id: number;
@@ -13,6 +12,10 @@ interface DataIntegration {
   brands: string[];
   total_vio_pct: number | null;
   incremental_vio_pct: number | null;
+  incremental_nz_pct: number | null;
+  incremental_uk_pct: number | null;
+  incremental_au_pct: number | null;
+  incremental_us_pct: number | null;
   integration_date: string;
 }
 
@@ -27,6 +30,10 @@ const EMPTY_FORM: Omit<DataIntegration, "id"> = {
   brands: [],
   total_vio_pct: null,
   incremental_vio_pct: null,
+  incremental_nz_pct: null,
+  incremental_uk_pct: null,
+  incremental_au_pct: null,
+  incremental_us_pct: null,
   integration_date: "",
 };
 
@@ -108,7 +115,6 @@ export default function DataIntegrationsPage() {
   const [integrations, setIntegrations] = useState<DataIntegration[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
-  const [roadmap, setRoadmap]           = useState<RoadmapResponse | null>(null);
 
   // Filter + sort state
   const [search,     setSearch]     = useState("");
@@ -139,19 +145,7 @@ export default function DataIntegrationsPage() {
     }
   }, []);
 
-  const fetchRoadmap = useCallback(async () => {
-    try {
-      const res = await fetch("/api/coverage-roadmap");
-      if (res.ok) setRoadmap(await res.json());
-    } catch {
-      // Roadmap is non-critical — fail silently
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchIntegrations();
-    fetchRoadmap();
-  }, [fetchIntegrations, fetchRoadmap]);
+  useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
 
   // ── Sort handler ────────────────────────────────────────────────────────────
   function handleSort(key: SortKey) {
@@ -198,9 +192,15 @@ export default function DataIntegrationsPage() {
 
   function openEdit(row: DataIntegration) {
     setEditId(row.id);
-    setForm({ name: row.name, type: row.type, relationship: row.relationship ?? "third-party",
+    setForm({
+      name: row.name, type: row.type, relationship: row.relationship ?? "third-party",
       brands: row.brands, total_vio_pct: row.total_vio_pct, incremental_vio_pct: row.incremental_vio_pct,
-      integration_date: row.integration_date });
+      incremental_nz_pct: row.incremental_nz_pct ?? null,
+      incremental_uk_pct: row.incremental_uk_pct ?? null,
+      incremental_au_pct: row.incremental_au_pct ?? null,
+      incremental_us_pct: row.incremental_us_pct ?? null,
+      integration_date: row.integration_date,
+    });
     setBrandsInput(row.brands.join(", ")); setFormError(null); setShowForm(true);
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
@@ -214,7 +214,7 @@ export default function DataIntegrationsPage() {
         ? await fetch(`/api/data-integrations/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await fetch("/api/data-integrations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) { const b = await res.json(); throw new Error(b.error || "Save failed"); }
-      await Promise.all([fetchIntegrations(), fetchRoadmap()]); setShowForm(false); setEditId(null);
+      await fetchIntegrations(); setShowForm(false); setEditId(null);
     } catch (e: unknown) { setFormError(e instanceof Error ? e.message : "Save failed"); }
     finally { setSaving(false); }
   }
@@ -223,7 +223,7 @@ export default function DataIntegrationsPage() {
     try {
       const res = await fetch(`/api/data-integrations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      setDeleteConfirm(null); await Promise.all([fetchIntegrations(), fetchRoadmap()]);
+      setDeleteConfirm(null); await fetchIntegrations();
     } catch { alert("Failed to delete integration"); }
   }
 
@@ -271,19 +271,19 @@ export default function DataIntegrationsPage() {
         )}
 
         {/* Coverage Roadmap Chart */}
-        {roadmap && roadmap.data.length > 0 && (
+        {integrations.length > 0 && (
           <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
             <div className="h-1 bg-brand-blue" />
-            <div className="px-5 pt-4 pb-2">
+            <div className="px-5 pt-4 pb-3">
               <div className="mb-4">
                 <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest">
-                  NZ Market VIN Coverage Roadmap
+                  VIN Coverage Roadmap
                 </h2>
                 <p className="text-xs text-grey-400 mt-0.5">
-                  Current NZ VIN coverage per brand · coloured segments show coverage gain from upcoming integrations
+                  Current VIN coverage per brand · segments show incremental gain from upcoming integrations
                 </p>
               </div>
-              <CoverageRoadmapChart data={roadmap.data} quarters={roadmap.quarters} />
+              <CoverageRoadmapChart />
             </div>
           </div>
         )}
@@ -331,6 +331,27 @@ export default function DataIntegrationsPage() {
                 <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Incremental Global VIO %</label>
                 <input type="number" min={0} max={100} step={0.1} value={form.incremental_vio_pct ?? ""} onChange={(e) => setForm((f) => ({ ...f, incremental_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))} placeholder="e.g. 8.3" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
                 <p className="text-xs text-grey-400 mt-1">New VIO % added on top of existing coverage</p>
+              </div>
+              {/* Market-specific incremental fields */}
+              <div className="col-span-2">
+                <p className="text-xs font-semibold text-grey-500 uppercase tracking-wider mb-2">Incremental VIO % by Market <span className="normal-case font-normal text-grey-400">(optional — used in the Coverage Roadmap chart)</span></p>
+                <div className="grid grid-cols-4 gap-3">
+                  {(["nz", "uk", "au", "us"] as const).map((m) => {
+                    const key = `incremental_${m}_pct` as keyof typeof form;
+                    return (
+                      <div key={m}>
+                        <label className="block text-xs font-semibold text-grey-400 mb-1">{m.toUpperCase()}</label>
+                        <input
+                          type="number" min={0} max={100} step={0.1}
+                          value={(form[key] as number | null) ?? ""}
+                          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
+                          placeholder="e.g. 3.2"
+                          className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             {formError && <p className="text-sm text-red-600 mt-3">{formError}</p>}
