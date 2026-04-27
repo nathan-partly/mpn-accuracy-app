@@ -84,7 +84,12 @@ function Legend({ quarters }: { quarters: string[] }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function CoverageRoadmapChart() {
+interface Props {
+  /** Increment this after saving/deleting an integration to trigger a re-fetch */
+  refreshKey?: number;
+}
+
+export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
   const [market, setMarket] = useState<Market>("all");
   const [roadmap, setRoadmap] = useState<RoadmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,7 +106,8 @@ export function CoverageRoadmapChart() {
     }
   }, []);
 
-  useEffect(() => { fetchData(market); }, [market, fetchData]);
+  // Re-fetch whenever market changes OR parent signals a data change via refreshKey
+  useEffect(() => { fetchData(market); }, [market, fetchData, refreshKey]);
 
   const data: RoadmapBrand[] = roadmap?.data ?? [];
   const quarters: string[] = roadmap?.quarters ?? [];

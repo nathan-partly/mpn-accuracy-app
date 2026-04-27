@@ -115,6 +115,7 @@ export default function DataIntegrationsPage() {
   const [integrations, setIntegrations] = useState<DataIntegration[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
+  const [chartRefreshKey, setChartRefreshKey] = useState(0);
 
   // Filter + sort state
   const [search,     setSearch]     = useState("");
@@ -214,7 +215,7 @@ export default function DataIntegrationsPage() {
         ? await fetch(`/api/data-integrations/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await fetch("/api/data-integrations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) { const b = await res.json(); throw new Error(b.error || "Save failed"); }
-      await fetchIntegrations(); setShowForm(false); setEditId(null);
+      await fetchIntegrations(); setShowForm(false); setEditId(null); setChartRefreshKey((k) => k + 1);
     } catch (e: unknown) { setFormError(e instanceof Error ? e.message : "Save failed"); }
     finally { setSaving(false); }
   }
@@ -223,7 +224,7 @@ export default function DataIntegrationsPage() {
     try {
       const res = await fetch(`/api/data-integrations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      setDeleteConfirm(null); await fetchIntegrations();
+      setDeleteConfirm(null); await fetchIntegrations(); setChartRefreshKey((k) => k + 1);
     } catch { alert("Failed to delete integration"); }
   }
 
@@ -283,7 +284,7 @@ export default function DataIntegrationsPage() {
                   Current VIN coverage per brand · segments show incremental gain from upcoming integrations
                 </p>
               </div>
-              <CoverageRoadmapChart />
+              <CoverageRoadmapChart refreshKey={chartRefreshKey} />
             </div>
           </div>
         )}

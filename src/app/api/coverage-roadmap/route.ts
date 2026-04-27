@@ -90,13 +90,23 @@ export async function GET(req: Request): Promise<NextResponse> {
     // No snapshot — all brands show 0% today
   }
 
-  // ── 2. Integrations ───────────────────────────────────────────────────────────
+  // ── 2. Integrations — ensure market columns exist before selecting them ────────
+  try {
+    await sql`
+      ALTER TABLE data_integrations
+        ADD COLUMN IF NOT EXISTS incremental_nz_pct float,
+        ADD COLUMN IF NOT EXISTS incremental_uk_pct float,
+        ADD COLUMN IF NOT EXISTS incremental_au_pct float,
+        ADD COLUMN IF NOT EXISTS incremental_us_pct float
+    `;
+  } catch { /* already applied */ }
+
   let integrations: Integration[] = [];
   try {
     const rows = await sql`
       SELECT
         brands,
-        integration_date::text    AS integration_date,
+        integration_date::text     AS integration_date,
         incremental_vio_pct::float AS incremental_vio_pct,
         incremental_nz_pct::float  AS incremental_nz_pct,
         incremental_uk_pct::float  AS incremental_uk_pct,
