@@ -84,8 +84,8 @@ export async function GET(): Promise<NextResponse> {
   // ── 3. Collect all relevant brands ───────────────────────────────────────────
   // Include every brand from the coverage snapshot plus any from integrations
   const allBrands = new Set<string>([
-    ...brandCoverage.keys(),
-    ...brandFirstQuarter.keys(),
+    ...Array.from(brandCoverage.keys()),
+    ...Array.from(brandFirstQuarter.keys()),
   ]);
   // Also include brands from live integrations (even if not in coverage snapshot)
   for (const integ of integrations) {
