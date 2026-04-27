@@ -3,6 +3,8 @@ import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+export type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
+
 export interface DataIntegration {
   id: number;
   name: string;
@@ -15,6 +17,7 @@ export interface DataIntegration {
   incremental_uk_pct: number | null;
   incremental_au_pct: number | null;
   incremental_us_pct: number | null;
+  brand_incremental: BrandIncrementalMap | null;
   integration_date: string;
   created_at: string;
   updated_at: string;
@@ -32,7 +35,8 @@ export async function GET() {
         ADD COLUMN IF NOT EXISTS incremental_nz_pct float,
         ADD COLUMN IF NOT EXISTS incremental_uk_pct float,
         ADD COLUMN IF NOT EXISTS incremental_au_pct float,
-        ADD COLUMN IF NOT EXISTS incremental_us_pct float
+        ADD COLUMN IF NOT EXISTS incremental_us_pct float,
+        ADD COLUMN IF NOT EXISTS brand_incremental jsonb
     `;
   } catch {
     // Migration failed (e.g. already applied) — continue anyway
@@ -48,6 +52,7 @@ export async function GET() {
         incremental_uk_pct::float     AS incremental_uk_pct,
         incremental_au_pct::float     AS incremental_au_pct,
         incremental_us_pct::float     AS incremental_us_pct,
+        brand_incremental,
         integration_date::text        AS integration_date,
         created_at, updated_at
       FROM data_integrations
@@ -67,6 +72,7 @@ export async function POST(req: Request) {
       name, type, relationship, brands,
       total_vio_pct, incremental_vio_pct,
       incremental_nz_pct, incremental_uk_pct, incremental_au_pct, incremental_us_pct,
+      brand_incremental,
       integration_date,
     } = body;
 
@@ -78,17 +84,22 @@ export async function POST(req: Request) {
     }
     const rel: string = ["direct", "third-party"].includes(relationship) ? relationship : "third-party";
     const brandsArr: string[] = Array.isArray(brands) ? brands.map((b: string) => b.trim()).filter(Boolean) : [];
+    const brandIncrementalVal = brand_incremental && typeof brand_incremental === "object" && Object.keys(brand_incremental).length > 0
+      ? JSON.stringify(brand_incremental)
+      : null;
 
     const rows = await sql`
       INSERT INTO data_integrations
         (name, type, relationship, brands,
          total_vio_pct, incremental_vio_pct,
          incremental_nz_pct, incremental_uk_pct, incremental_au_pct, incremental_us_pct,
+         brand_incremental,
          integration_date)
       VALUES
         (${name.trim()}, ${type}, ${rel}, ${brandsArr},
          ${n(total_vio_pct)}, ${n(incremental_vio_pct)},
          ${n(incremental_nz_pct)}, ${n(incremental_uk_pct)}, ${n(incremental_au_pct)}, ${n(incremental_us_pct)},
+         ${brandIncrementalVal}::jsonb,
          ${integration_date})
       RETURNING
         id, name, type, relationship, brands,
@@ -98,6 +109,7 @@ export async function POST(req: Request) {
         incremental_uk_pct::float     AS incremental_uk_pct,
         incremental_au_pct::float     AS incremental_au_pct,
         incremental_us_pct::float     AS incremental_us_pct,
+        brand_incremental,
         integration_date::text        AS integration_date,
         created_at, updated_at
     `;

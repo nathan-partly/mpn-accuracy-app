@@ -20,6 +20,7 @@ export async function PUT(
       name, type, relationship, brands,
       total_vio_pct, incremental_vio_pct,
       incremental_nz_pct, incremental_uk_pct, incremental_au_pct, incremental_us_pct,
+      brand_incremental,
       integration_date,
     } = body;
 
@@ -31,6 +32,9 @@ export async function PUT(
     }
     const rel: string = ["direct", "third-party"].includes(relationship) ? relationship : "third-party";
     const brandsArr: string[] = Array.isArray(brands) ? brands.map((b: string) => b.trim()).filter(Boolean) : [];
+    const brandIncrementalVal = brand_incremental && typeof brand_incremental === "object" && Object.keys(brand_incremental).length > 0
+      ? JSON.stringify(brand_incremental)
+      : null;
 
     const rows = await sql`
       UPDATE data_integrations
@@ -45,6 +49,7 @@ export async function PUT(
         incremental_uk_pct    = ${n(incremental_uk_pct)},
         incremental_au_pct    = ${n(incremental_au_pct)},
         incremental_us_pct    = ${n(incremental_us_pct)},
+        brand_incremental     = ${brandIncrementalVal}::jsonb,
         integration_date      = ${integration_date},
         updated_at            = NOW()
       WHERE id = ${id}
@@ -56,6 +61,7 @@ export async function PUT(
         incremental_uk_pct::float     AS incremental_uk_pct,
         incremental_au_pct::float     AS incremental_au_pct,
         incremental_us_pct::float     AS incremental_us_pct,
+        brand_incremental,
         integration_date::text        AS integration_date,
         created_at, updated_at
     `;

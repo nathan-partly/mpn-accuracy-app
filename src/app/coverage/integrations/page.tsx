@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
 
+type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
+
 interface DataIntegration {
   id: number;
   name: string;
@@ -16,6 +18,7 @@ interface DataIntegration {
   incremental_uk_pct: number | null;
   incremental_au_pct: number | null;
   incremental_us_pct: number | null;
+  brand_incremental: BrandIncrementalMap | null;
   integration_date: string;
 }
 
@@ -34,8 +37,12 @@ const EMPTY_FORM: Omit<DataIntegration, "id"> = {
   incremental_uk_pct: null,
   incremental_au_pct: null,
   incremental_us_pct: null,
+  brand_incremental: null,
   integration_date: "",
 };
+
+// Per-brand incremental state: string values so inputs work cleanly
+type BrandIncrementalForm = Record<string, { nz: string; uk: string; au: string; us: string }>;
 
 function todayISO() {
   return new Date().toISOString().split("T")[0];
@@ -129,6 +136,7 @@ export default function DataIntegrationsPage() {
   const [editId,    setEditId]    = useState<number | null>(null);
   const [form,      setForm]      = useState<Omit<DataIntegration, "id">>(EMPTY_FORM);
   const [brandsInput, setBrandsInput] = useState("");
+  const [brandIncremental, setBrandIncremental] = useState<BrandIncrementalForm>({});
   const [saving,    setSaving]    = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
@@ -187,7 +195,7 @@ export default function DataIntegrationsPage() {
 
   // ── Form helpers ────────────────────────────────────────────────────────────
   function openAdd() {
-    setEditId(null); setForm(EMPTY_FORM); setBrandsInput(""); setFormError(null); setShowForm(true);
+    setEditId(null); setForm(EMPTY_FORM); setBrandsInput(""); setBrandIncremental({}); setFormError(null); setShowForm(true);
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
@@ -200,8 +208,23 @@ export default function DataIntegrationsPage() {
       incremental_uk_pct: row.incremental_uk_pct ?? null,
       incremental_au_pct: row.incremental_au_pct ?? null,
       incremental_us_pct: row.incremental_us_pct ?? null,
+      brand_incremental: row.brand_incremental ?? null,
       integration_date: row.integration_date,
     });
+    // Populate per-brand form state from saved data
+    const bi: BrandIncrementalForm = {};
+    if (row.brand_incremental) {
+      for (const brand of Object.keys(row.brand_incremental)) {
+        const v = row.brand_incremental[brand];
+        bi[brand] = {
+          nz: v.nz != null ? String(v.nz) : "",
+          uk: v.uk != null ? String(v.uk) : "",
+          au: v.au != null ? String(v.au) : "",
+          us: v.us != null ? String(v.us) : "",
+        };
+      }
+    }
+    setBrandIncremental(bi);
     setBrandsInput(row.brands.join(", ")); setFormError(null); setShowForm(true);
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
@@ -209,7 +232,24 @@ export default function DataIntegrationsPage() {
   async function handleSave() {
     if (!form.name.trim() || !form.integration_date) { setFormError("Integration name and date are required."); return; }
     setSaving(true); setFormError(null);
-    const payload = { ...form, brands: brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean) };
+    const brandsArr = brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
+    // Convert per-brand string values to numbers for the payload
+    const brandIncrementalPayload: BrandIncrementalMap = {};
+    for (const brand of Object.keys(brandIncremental)) {
+      const v = brandIncremental[brand];
+      const nz = v.nz !== "" ? parseFloat(v.nz) : null;
+      const uk = v.uk !== "" ? parseFloat(v.uk) : null;
+      const au = v.au !== "" ? parseFloat(v.au) : null;
+      const us = v.us !== "" ? parseFloat(v.us) : null;
+      if (nz != null || uk != null || au != null || us != null) {
+        brandIncrementalPayload[brand] = { nz, uk, au, us };
+      }
+    }
+    const payload = {
+      ...form,
+      brands: brandsArr,
+      brand_incremental: Object.keys(brandIncrementalPayload).length > 0 ? brandIncrementalPayload : null,
+    };
     try {
       const res = editId
         ? await fetch(`/api/data-integrations/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
@@ -333,27 +373,65 @@ export default function DataIntegrationsPage() {
                 <input type="number" min={0} max={100} step={0.1} value={form.incremental_vio_pct ?? ""} onChange={(e) => setForm((f) => ({ ...f, incremental_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))} placeholder="e.g. 8.3" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
                 <p className="text-xs text-grey-400 mt-1">New VIO % added on top of existing coverage</p>
               </div>
-              {/* Market-specific incremental fields */}
-              <div className="col-span-2">
-                <p className="text-xs font-semibold text-grey-500 uppercase tracking-wider mb-2">Incremental VIO % by Market <span className="normal-case font-normal text-grey-400">(optional — used in the Coverage Roadmap chart)</span></p>
-                <div className="grid grid-cols-4 gap-3">
-                  {(["nz", "uk", "au", "us"] as const).map((m) => {
-                    const key = `incremental_${m}_pct` as keyof typeof form;
-                    return (
-                      <div key={m}>
-                        <label className="block text-xs font-semibold text-grey-400 mb-1">{m.toUpperCase()}</label>
-                        <input
-                          type="number" min={0} max={100} step={0.1}
-                          value={(form[key] as number | null) ?? ""}
-                          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
-                          placeholder="e.g. 3.2"
-                          className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue"
-                        />
+              {/* Per-brand incremental coverage by market */}
+              {(() => {
+                const parsedBrands = brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
+                if (parsedBrands.length === 0) return null;
+                return (
+                  <div className="col-span-2">
+                    <p className="text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
+                      Per-brand Incremental Coverage %{" "}
+                      <span className="normal-case font-normal text-grey-400">
+                        — enter the expected VIN coverage gain per brand per market
+                      </span>
+                    </p>
+                    <div className="border border-grey-200 rounded-lg overflow-hidden">
+                      <div className="max-h-56 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <thead className="sticky top-0 bg-grey-50 border-b border-grey-200 z-10">
+                            <tr>
+                              <th className="text-left px-3 py-2 font-semibold text-grey-500 uppercase tracking-wider w-32">Brand</th>
+                              {(["NZ", "UK", "AU", "US"] as const).map((m) => (
+                                <th key={m} className="text-center px-2 py-2 font-semibold text-grey-500 uppercase tracking-wider">{m} %</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {parsedBrands.map((brand, idx) => (
+                              <tr key={brand} className={idx % 2 === 0 ? "bg-white" : "bg-grey-50/50"}>
+                                <td className="px-3 py-1.5 font-semibold text-grey-700 text-xs">{brand}</td>
+                                {(["nz", "uk", "au", "us"] as const).map((m) => (
+                                  <td key={m} className="px-2 py-1.5">
+                                    <input
+                                      type="number" min={0} max={100} step={0.1}
+                                      value={brandIncremental[brand]?.[m] ?? ""}
+                                      onChange={(e) => setBrandIncremental((prev) => ({
+                                        ...prev,
+                                        [brand]: {
+                                          nz: prev[brand]?.nz ?? "",
+                                          uk: prev[brand]?.uk ?? "",
+                                          au: prev[brand]?.au ?? "",
+                                          us: prev[brand]?.us ?? "",
+                                          [m]: e.target.value,
+                                        },
+                                      }))}
+                                      placeholder="—"
+                                      className="w-full px-2 py-1 border border-grey-200 rounded text-xs text-grey-950 focus:outline-none focus:border-brand-blue text-center tabular-nums"
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    </div>
+                    <p className="text-xs text-grey-400 mt-1">
+                      Leave blank for brands with no expected market-specific gain. Empty fields fall back to Incremental Global VIO % ÷ brand count.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
             {formError && <p className="text-sm text-red-600 mt-3">{formError}</p>}
             <div className="flex gap-3 mt-5">

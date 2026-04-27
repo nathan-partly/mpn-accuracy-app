@@ -32,6 +32,8 @@ export interface RoadmapResponse {
   market: Market;
 }
 
+type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
+
 interface Integration {
   brands: string[];
   integration_date: string;
@@ -40,6 +42,7 @@ interface Integration {
   incremental_uk_pct: number | null;
   incremental_au_pct: number | null;
   incremental_us_pct: number | null;
+  brand_incremental: BrandIncrementalMap | null;
 }
 
 /** Pick the right incremental field for a market, falling back to global/4 as rough estimate */
@@ -98,7 +101,8 @@ export async function GET(req: Request): Promise<NextResponse> {
         ADD COLUMN IF NOT EXISTS incremental_nz_pct float,
         ADD COLUMN IF NOT EXISTS incremental_uk_pct float,
         ADD COLUMN IF NOT EXISTS incremental_au_pct float,
-        ADD COLUMN IF NOT EXISTS incremental_us_pct float
+        ADD COLUMN IF NOT EXISTS incremental_us_pct float,
+        ADD COLUMN IF NOT EXISTS brand_incremental jsonb
     `;
   } catch { /* already applied */ }
 
@@ -112,7 +116,8 @@ export async function GET(req: Request): Promise<NextResponse> {
         incremental_nz_pct::float  AS incremental_nz_pct,
         incremental_uk_pct::float  AS incremental_uk_pct,
         incremental_au_pct::float  AS incremental_au_pct,
-        incremental_us_pct::float  AS incremental_us_pct
+        incremental_us_pct::float  AS incremental_us_pct,
+        brand_incremental
       FROM data_integrations
       ORDER BY integration_date ASC
     `;
@@ -129,7 +134,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   // ── 4. Per-brand: earliest upcoming quarter + per-brand incremental % ─────────
-  // Per-brand incremental = integration's market incremental / number of brands in it
+  // Priority: brand_incremental[brand][market] > integration market total / brandCount > 0
   const brandUpcoming: Record<string, { quarter: string; increment: number }> = {};
 
   for (const integ of integrations) {
@@ -137,10 +142,28 @@ export async function GET(req: Request): Promise<NextResponse> {
     const q = quarterLabel(integ.integration_date);
     const totalIncremental = marketIncremental(integ, market);
     const brandCount = (integ.brands ?? []).length || 1;
-    const perBrand = totalIncremental / brandCount;
 
     for (const brand of (integ.brands ?? [])) {
       const key = brand.toUpperCase();
+
+      // Try per-brand override first (only for specific markets, not "all")
+      let perBrand: number;
+      if (market !== "all" && integ.brand_incremental) {
+        const brandData = integ.brand_incremental[key] ?? integ.brand_incremental[brand];
+        if (brandData) {
+          const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
+          if (mVal != null) {
+            perBrand = mVal;
+          } else {
+            perBrand = totalIncremental / brandCount;
+          }
+        } else {
+          perBrand = totalIncremental / brandCount;
+        }
+      } else {
+        perBrand = totalIncremental / brandCount;
+      }
+
       const existing = brandUpcoming[key];
       if (!existing || quarterSortKey(q) < quarterSortKey(existing.quarter)) {
         brandUpcoming[key] = { quarter: q, increment: perBrand };
