@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
+import type { RoadmapResponse } from "@/app/api/coverage-roadmap/route";
 
 interface DataIntegration {
   id: number;
@@ -106,6 +108,7 @@ export default function DataIntegrationsPage() {
   const [integrations, setIntegrations] = useState<DataIntegration[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
+  const [roadmap, setRoadmap]           = useState<RoadmapResponse | null>(null);
 
   // Filter + sort state
   const [search,     setSearch]     = useState("");
@@ -136,7 +139,19 @@ export default function DataIntegrationsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
+  const fetchRoadmap = useCallback(async () => {
+    try {
+      const res = await fetch("/api/coverage-roadmap");
+      if (res.ok) setRoadmap(await res.json());
+    } catch {
+      // Roadmap is non-critical — fail silently
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchIntegrations();
+    fetchRoadmap();
+  }, [fetchIntegrations, fetchRoadmap]);
 
   // ── Sort handler ────────────────────────────────────────────────────────────
   function handleSort(key: SortKey) {
@@ -199,7 +214,7 @@ export default function DataIntegrationsPage() {
         ? await fetch(`/api/data-integrations/${editId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
         : await fetch("/api/data-integrations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) { const b = await res.json(); throw new Error(b.error || "Save failed"); }
-      await fetchIntegrations(); setShowForm(false); setEditId(null);
+      await Promise.all([fetchIntegrations(), fetchRoadmap()]); setShowForm(false); setEditId(null);
     } catch (e: unknown) { setFormError(e instanceof Error ? e.message : "Save failed"); }
     finally { setSaving(false); }
   }
@@ -208,7 +223,7 @@ export default function DataIntegrationsPage() {
     try {
       const res = await fetch(`/api/data-integrations/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      setDeleteConfirm(null); await fetchIntegrations();
+      setDeleteConfirm(null); await Promise.all([fetchIntegrations(), fetchRoadmap()]);
     } catch { alert("Failed to delete integration"); }
   }
 
@@ -252,6 +267,24 @@ export default function DataIntegrationsPage() {
                 <p className="text-xs text-grey-400 mt-0.5">{kpi.sub}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Coverage Roadmap Chart */}
+        {roadmap && roadmap.data.length > 0 && (
+          <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
+            <div className="h-1 bg-brand-blue" />
+            <div className="px-5 pt-4 pb-2">
+              <div className="mb-4">
+                <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest">
+                  NZ Market VIN Coverage Roadmap
+                </h2>
+                <p className="text-xs text-grey-400 mt-0.5">
+                  Current NZ VIN coverage per brand · coloured segments show coverage gain from upcoming integrations
+                </p>
+              </div>
+              <CoverageRoadmapChart data={roadmap.data} quarters={roadmap.quarters} />
+            </div>
           </div>
         )}
 
