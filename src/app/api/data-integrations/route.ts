@@ -26,6 +26,19 @@ function n(v: unknown): number | null {
 
 export async function GET() {
   try {
+    // Idempotent migration — adds market columns if they don't exist yet
+    await sql`
+      ALTER TABLE data_integrations
+        ADD COLUMN IF NOT EXISTS incremental_nz_pct float,
+        ADD COLUMN IF NOT EXISTS incremental_uk_pct float,
+        ADD COLUMN IF NOT EXISTS incremental_au_pct float,
+        ADD COLUMN IF NOT EXISTS incremental_us_pct float
+    `;
+  } catch {
+    // Migration failed (e.g. already applied) — continue anyway
+  }
+
+  try {
     const rows = await sql`
       SELECT
         id, name, type, relationship, brands,
