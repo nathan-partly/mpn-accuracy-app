@@ -133,9 +133,12 @@ export async function GET(req: Request): Promise<NextResponse> {
     for (const b of (integ.brands ?? [])) integrationBrands[b.toUpperCase()] = true;
   }
 
-  // ── 4. Per-brand: earliest upcoming quarter + per-brand incremental % ─────────
+  // ── 4. Per-brand, per-quarter gains ──────────────────────────────────────────
+  // Accumulate gains across ALL upcoming integrations, keyed by brand → quarter.
   // Priority: brand_incremental[brand][market] > integration market total / brandCount > 0
-  const brandUpcoming: Record<string, { quarter: string; increment: number }> = {};
+  // We skip zero-gain entries so that a brand with no NZ data in an earlier integration
+  // doesn't block a positive gain in a later one.
+  const brandQuarterGains: Record<string, Record<string, number>> = {};
 
   for (const integ of integrations) {
     if (!integ.integration_date || integ.integration_date <= todayISO) continue;
@@ -152,11 +155,7 @@ export async function GET(req: Request): Promise<NextResponse> {
         const brandData = integ.brand_incremental[key] ?? integ.brand_incremental[brand];
         if (brandData) {
           const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
-          if (mVal != null) {
-            perBrand = mVal;
-          } else {
-            perBrand = totalIncremental / brandCount;
-          }
+          perBrand = mVal != null ? mVal : totalIncremental / brandCount;
         } else {
           perBrand = totalIncremental / brandCount;
         }
@@ -164,9 +163,10 @@ export async function GET(req: Request): Promise<NextResponse> {
         perBrand = totalIncremental / brandCount;
       }
 
-      const existing = brandUpcoming[key];
-      if (!existing || quarterSortKey(q) < quarterSortKey(existing.quarter)) {
-        brandUpcoming[key] = { quarter: q, increment: perBrand };
+      // Only record positive gains — zero means "no data for this brand/market"
+      if (perBrand > 0) {
+        if (!brandQuarterGains[key]) brandQuarterGains[key] = {};
+        brandQuarterGains[key][q] = (brandQuarterGains[key][q] ?? 0) + perBrand;
       }
     }
   }
@@ -177,7 +177,7 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   for (const brand of Object.keys(integrationBrands)) {
     const cov = brandCoverage[brand] ?? { today: 0, totalVins: 0 };
-    const upcoming = brandUpcoming[brand] ?? null;
+    const gains = brandQuarterGains[brand] ?? {};
 
     const row: RoadmapBrand = {
       brand,
@@ -185,9 +185,9 @@ export async function GET(req: Request): Promise<NextResponse> {
       totalVins: cov.totalVins,
     };
 
-    if (upcoming && upcoming.increment > 0) {
-      row[upcoming.quarter] = parseFloat(upcoming.increment.toFixed(2));
-      quartersFound[upcoming.quarter] = true;
+    for (const [q, increment] of Object.entries(gains)) {
+      row[q] = parseFloat(increment.toFixed(2));
+      quartersFound[q] = true;
     }
 
     rows.push(row);
