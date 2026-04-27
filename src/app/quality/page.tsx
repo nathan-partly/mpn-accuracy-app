@@ -5,7 +5,6 @@ import {
   getQualityTrendAllBrands,
 } from "@/lib/queries";
 import { KpiCard } from "@/components/KpiCard";
-import { QualityTrendCharts } from "@/components/QualityTrendCharts";
 import { QualityBrandTable } from "@/components/QualityBrandTable";
 import { formatDate } from "@/lib/utils";
 
@@ -150,18 +149,8 @@ export default async function QualityPage() {
         </div>
       </div>
 
-      {/* Trend charts (client component) — only shown when ≥2 snapshots */}
-      {snapshots.length >= 2 && (
-        <section className="mb-8">
-          <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">
-            Coverage Trends · {snapshots.length} snapshots
-          </h2>
-          <QualityTrendCharts rows={trendRows} />
-        </section>
-      )}
-
-      {/* Brand table (client component — filter + sort) */}
-      <QualityBrandTable brands={brands} />
+      {/* Brand table (client component — filter + sort + expandable trend rows) */}
+      <QualityBrandTable brands={brands} trendRows={trendRows} />
 
       {/* Previous snapshots */}
       {snapshots.length > 1 && (

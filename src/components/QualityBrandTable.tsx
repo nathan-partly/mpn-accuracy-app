@@ -1,10 +1,21 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { LevelBadge } from "@/components/LevelBadge";
-import type { QualityBrandData } from "@/types";
+import { formatDate } from "@/lib/utils";
+import type { QualityBrandData, QualityTrendRow } from "@/types";
 
-// ─── Sub-components (copied from server page, safe to duplicate in client) ────
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 function CoverageBar({ value, threshold }: { value: number | null; threshold: number }) {
   if (value == null) return <span className="text-grey-300 text-xs">—</span>;
@@ -82,6 +93,108 @@ function MarketPills({ brand }: { brand: QualityBrandData }) {
   );
 }
 
+// ─── Expandable trend panel ────────────────────────────────────────────────────
+
+function BrandTrendPanel({ rows }: { rows: QualityTrendRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="py-6 text-center text-xs text-grey-400">No trend data available.</div>
+    );
+  }
+
+  if (rows.length === 1) {
+    const r = rows[0];
+    return (
+      <div className="py-5 flex items-center gap-8 justify-center text-sm">
+        <div className="text-center">
+          <p className="text-2xl font-bold text-brand-blue">{r.classification_pct != null ? `${Number(r.classification_pct).toFixed(1)}%` : "—"}</p>
+          <p className="text-xs text-grey-400 mt-0.5">Classification</p>
+        </div>
+        <div className="text-center">
+          <p className="text-2xl font-bold text-emerald-600">{r.annotation_pct != null ? `${Number(r.annotation_pct).toFixed(1)}%` : "—"}</p>
+          <p className="text-xs text-grey-400 mt-0.5">Annotation</p>
+        </div>
+        <p className="text-xs text-grey-300">{formatDate(r.snapshot_date)}</p>
+      </div>
+    );
+  }
+
+  const chartData = rows.map((r) => ({
+    date: formatDate(r.snapshot_date),
+    classification: r.classification_pct != null ? Number(r.classification_pct) : null,
+    annotation: r.annotation_pct != null ? Number(r.annotation_pct) : null,
+  }));
+
+  const allVals = chartData.flatMap((d) => [d.classification, d.annotation]).filter((v): v is number => v != null);
+  const minVal = allVals.length > 0 ? Math.min(...allVals) : 0;
+  const yMin = Math.max(0, Math.floor(minVal - 5));
+
+  const maxTicks = 6;
+  const tickInterval = chartData.length > maxTicks ? Math.ceil(chartData.length / maxTicks) : 0;
+
+  return (
+    <div className="py-4 px-6">
+      <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-3">Coverage Over Time</p>
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+          <CartesianGrid stroke="#F3F4F6" strokeDasharray="3 3" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 10, fill: "#9CA3AF" }}
+            axisLine={false}
+            tickLine={false}
+            interval={tickInterval}
+          />
+          <YAxis
+            domain={[yMin, 100]}
+            tick={{ fontSize: 10, fill: "#9CA3AF" }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v) => `${v}%`}
+            width={38}
+          />
+          <Tooltip
+            contentStyle={{
+              border: "1px solid #E5E7EB",
+              borderRadius: 8,
+              fontSize: 11,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.07)",
+            }}
+            formatter={(value: number, name: string) => [
+              value != null ? `${value.toFixed(1)}%` : "—",
+              name === "classification" ? "Classification" : "Annotation",
+            ]}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={6}
+            wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+            formatter={(value: string) => value === "classification" ? "Classification" : "Annotation"}
+          />
+          <Line
+            type="monotone"
+            dataKey="classification"
+            stroke="#3632FF"
+            strokeWidth={2}
+            dot={{ fill: "#3632FF", r: 3, strokeWidth: 0 }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          />
+          <Line
+            type="monotone"
+            dataKey="annotation"
+            stroke="#059669"
+            strokeWidth={2}
+            dot={{ fill: "#059669", r: 3, strokeWidth: 0 }}
+            activeDot={{ r: 5 }}
+            connectNulls
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ─── Sorting ──────────────────────────────────────────────────────────────────
 type SortKey = "vio_rank" | "brand" | "vio_pct" | "classification" | "annotation" | "level";
 type SortDir = "asc" | "desc";
@@ -106,10 +219,27 @@ function SortIcon({ dir }: { dir: SortDir | null }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export function QualityBrandTable({ brands }: { brands: QualityBrandData[] }) {
+interface Props {
+  brands: QualityBrandData[];
+  trendRows?: QualityTrendRow[];
+}
+
+export function QualityBrandTable({ brands, trendRows = [] }: Props) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("vio_rank");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [expandedBrand, setExpandedBrand] = useState<string | null>(null);
+
+  // Group trend rows by brand name for O(1) lookup in rows
+  const trendByBrand = useMemo(() => {
+    const map = new Map<string, QualityTrendRow[]>();
+    for (const row of trendRows) {
+      const existing = map.get(row.brand) ?? [];
+      existing.push(row);
+      map.set(row.brand, existing);
+    }
+    return map;
+  }, [trendRows]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -165,6 +295,8 @@ export function QualityBrandTable({ brands }: { brands: QualityBrandData[] }) {
     );
   }
 
+  const hasTrend = trendRows.length > 0;
+
   return (
     <section>
       <div className="flex items-center justify-between mb-4">
@@ -199,42 +331,77 @@ export function QualityBrandTable({ brands }: { brands: QualityBrandData[] }) {
                 {th("Annotation", "annotation", "left")}
                 <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Gates</th>
                 {th("Level", "level", "right")}
+                {hasTrend && <th className="px-5 py-3 w-8" />}
               </tr>
             </thead>
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-10 text-center text-sm text-grey-400">No brands match your filter.</td>
+                  <td colSpan={hasTrend ? 9 : 8} className="px-5 py-10 text-center text-sm text-grey-400">No brands match your filter.</td>
                 </tr>
               ) : (
-                sorted.map((brand, i) => (
-                  <tr key={brand.id} className={`hover:bg-grey-50 transition-colors ${i !== sorted.length - 1 ? "border-b border-grey-50" : ""}`}>
-                    <td className="px-5 py-3.5 text-grey-400 text-xs tabular-nums text-center">
-                      {brand.vio_rank ?? "—"}
-                    </td>
-                    <td className="px-5 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
-                    <td className="px-5 py-3.5 text-right text-grey-700 tabular-nums font-medium">
-                      {brand.vio_combined_pct != null
-                        ? `${(Number(brand.vio_combined_pct) / 4).toFixed(2)}%`
-                        : "—"}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <MarketPills brand={brand} />
-                    </td>
-                    <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
-                      <CoverageBar value={brand.classification_pct} threshold={80} />
-                    </td>
-                    <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
-                      <CoverageBar value={brand.annotation_pct} threshold={80} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <QualityGates brand={brand} />
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <LevelBadge level={brand.level} />
-                    </td>
-                  </tr>
-                ))
+                sorted.map((brand, i) => {
+                  const isExpanded = expandedBrand === brand.brand;
+                  const brandTrend = trendByBrand.get(brand.brand) ?? [];
+                  const isLast = i === sorted.length - 1;
+
+                  return (
+                    <>
+                      <tr
+                        key={brand.id}
+                        onClick={() => hasTrend && setExpandedBrand(isExpanded ? null : brand.brand)}
+                        className={`transition-colors ${hasTrend ? "cursor-pointer" : ""} ${isExpanded ? "bg-grey-50" : "hover:bg-grey-50"} ${!isExpanded && !isLast ? "border-b border-grey-50" : ""}`}
+                      >
+                        <td className="px-5 py-3.5 text-grey-400 text-xs tabular-nums text-center">
+                          {brand.vio_rank ?? "—"}
+                        </td>
+                        <td className="px-5 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
+                        <td className="px-5 py-3.5 text-right text-grey-700 tabular-nums font-medium">
+                          {brand.vio_combined_pct != null
+                            ? `${(Number(brand.vio_combined_pct) / 4).toFixed(2)}%`
+                            : "—"}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <MarketPills brand={brand} />
+                        </td>
+                        <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
+                          <CoverageBar value={brand.classification_pct} threshold={80} />
+                        </td>
+                        <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
+                          <CoverageBar value={brand.annotation_pct} threshold={80} />
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <QualityGates brand={brand} />
+                        </td>
+                        <td className="px-5 py-3.5 text-right">
+                          <LevelBadge level={brand.level} />
+                        </td>
+                        {hasTrend && (
+                          <td className="px-3 py-3.5 text-grey-300">
+                            <svg
+                              className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180 text-brand-blue" : ""}`}
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2.5}
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </td>
+                        )}
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${brand.id}-trend`} className={`bg-grey-50 ${!isLast ? "border-b border-grey-100" : ""}`}>
+                          <td colSpan={hasTrend ? 9 : 8} className="px-0 py-0">
+                            <div className="border-t border-grey-100">
+                              <BrandTrendPanel rows={brandTrend} />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })
               )}
             </tbody>
           </table>
