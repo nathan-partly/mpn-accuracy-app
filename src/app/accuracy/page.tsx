@@ -11,6 +11,7 @@ import { AccuracyBadge } from "@/components/AccuracyBadge";
 import { AccuracyBrandsTable } from "@/components/AccuracyBrandsTable";
 import { AccuracySnapshotHistory } from "@/components/AccuracySnapshotHistory";
 import { SyncCoverageButton } from "@/components/SyncCoverageButton";
+import { AccuracyTrendChart } from "@/components/AccuracyTrendChart";
 import { accuracyPct } from "@/lib/utils";
 import type { GlobalProviderStat } from "@/types";
 
@@ -91,6 +92,19 @@ export default async function DashboardPage() {
           sub="excluding skipped / no data"
         />
       </div>
+
+      {/* Accuracy trend chart */}
+      <section className="mb-10">
+        <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">
+          Accuracy Over Time
+        </h2>
+        <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
+          <div className="h-1 bg-brand-blue" />
+          <div className="px-5 py-5">
+            <AccuracyTrendChart />
+          </div>
+        </div>
+      </section>
 
       {/* Benchmarked brands table (client component — filter + sort + VIO) */}
       {benchmarked.length > 0 && (
