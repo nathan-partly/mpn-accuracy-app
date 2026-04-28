@@ -6,7 +6,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const todayISO = new Date().toISOString().split("T")[0];
 
-  const result: Record<string, unknown> = { todayISO };
+  // Expose DB host so we can verify which Neon instance Vercel is hitting
+  const dbUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? "(not set)";
+  const dbHostMatch = dbUrl.match(/@([^/]+)\//);
+  const result: Record<string, unknown> = {
+    todayISO,
+    db_host: dbHostMatch ? dbHostMatch[1] : "(could not parse)",
+  };
 
   // ── Raw JSONB query ─────────────────────────────────────────────────────────
   try {
