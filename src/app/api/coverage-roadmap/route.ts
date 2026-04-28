@@ -142,35 +142,28 @@ export async function GET(req: Request): Promise<NextResponse> {
     integrations = [];
   }
 
-  // ── 2b. Fresh per-ID brand_incremental lookup ─────────────────────────────────
+  // ── 2b. Fresh brand_incremental lookup for future integrations ───────────────
   // Neon's sequential scan can return stale JSONB page data after writes. Re-fetch
-  // brand_incremental for future integrations using targeted primary-key lookups,
-  // which bypass the buffer cache and always return committed data.
+  // brand_incremental for all future integrations using a date-filtered query,
+  // which forces a fresh read and always returns committed data.
   try {
-    const futureIds = integrations
-      .filter((i) => i.integration_date > todayISO)
-      .map((i) => i.id)
-      .filter((id): id is number => id != null);
-
-    if (futureIds.length > 0) {
-      const freshRows = await sql`
-        SELECT id, brand_incremental::text AS bi
-        FROM data_integrations
-        WHERE id = ANY(${futureIds})
-      `;
-      const freshMap: Record<number, BrandIncrementalMap | null> = {};
-      for (const row of freshRows as Array<{ id: number; bi: string | null }>) {
-        let parsed: BrandIncrementalMap | null = null;
-        if (row.bi) {
-          try { parsed = JSON.parse(row.bi); } catch { parsed = null; }
-        }
-        freshMap[row.id] = parsed;
+    const freshRows = await sql`
+      SELECT id, brand_incremental::text AS bi_fresh
+      FROM data_integrations
+      WHERE integration_date > ${todayISO}
+    `;
+    const freshMap: Record<number, BrandIncrementalMap | null> = {};
+    for (const row of freshRows as Array<{ id: number; bi_fresh: string | null }>) {
+      let parsed: BrandIncrementalMap | null = null;
+      if (row.bi_fresh) {
+        try { parsed = JSON.parse(row.bi_fresh); } catch { parsed = null; }
       }
-      // Override with fresh values
-      for (const integ of integrations) {
-        if (integ.id in freshMap) {
-          integ.brand_incremental = freshMap[integ.id] ?? null;
-        }
+      freshMap[row.id] = parsed;
+    }
+    // Override sequential-scan values with fresh reads
+    for (const integ of integrations) {
+      if (integ.id in freshMap) {
+        integ.brand_incremental = freshMap[integ.id] ?? null;
       }
     }
   } catch {
