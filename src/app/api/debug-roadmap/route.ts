@@ -8,11 +8,19 @@ export async function GET() {
 
   // Expose DB host so we can verify which Neon instance Vercel is hitting
   const dbUrl = process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? "(not set)";
-  const dbHostMatch = dbUrl.match(/@([^/]+)\//);
+  const dbHostMatch = dbUrl.match(/@([^/]+)\/([^?]+)/);
   const result: Record<string, unknown> = {
     todayISO,
     db_host: dbHostMatch ? dbHostMatch[1] : "(could not parse)",
+    db_name: dbHostMatch ? dbHostMatch[2] : "(could not parse)",
+    // Also run a SELECT current_database() to confirm what DB we're actually on
   };
+
+  // Confirm live DB identity
+  try {
+    const dbInfo = await sql`SELECT current_database() AS db, current_user AS usr, inet_server_addr()::text AS host`;
+    result.live_db_identity = dbInfo[0];
+  } catch (e) { result.live_db_identity_error = String(e); }
 
   // ── Raw JSONB query ─────────────────────────────────────────────────────────
   try {
