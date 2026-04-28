@@ -35,6 +35,7 @@ export interface RoadmapResponse {
 type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
 
 interface Integration {
+  id: number;
   brands: string[];
   integration_date: string;
   incremental_vio_pct: number | null;
@@ -114,6 +115,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     // the raw JSONB type instead of the cast text type in production environments.
     const rows = await sql`
       SELECT
+        id,
         brands,
         integration_date::text     AS integration_date,
         incremental_vio_pct::float AS incremental_vio_pct,
@@ -138,6 +140,41 @@ export async function GET(req: Request): Promise<NextResponse> {
     });
   } catch {
     integrations = [];
+  }
+
+  // ── 2b. Fresh per-ID brand_incremental lookup ─────────────────────────────────
+  // Neon's sequential scan can return stale JSONB page data after writes. Re-fetch
+  // brand_incremental for future integrations using targeted primary-key lookups,
+  // which bypass the buffer cache and always return committed data.
+  try {
+    const futureIds = integrations
+      .filter((i) => i.integration_date > todayISO)
+      .map((i) => i.id)
+      .filter((id): id is number => id != null);
+
+    if (futureIds.length > 0) {
+      const freshRows = await sql`
+        SELECT id, brand_incremental::text AS bi
+        FROM data_integrations
+        WHERE id = ANY(${futureIds})
+      `;
+      const freshMap: Record<number, BrandIncrementalMap | null> = {};
+      for (const row of freshRows as Array<{ id: number; bi: string | null }>) {
+        let parsed: BrandIncrementalMap | null = null;
+        if (row.bi) {
+          try { parsed = JSON.parse(row.bi); } catch { parsed = null; }
+        }
+        freshMap[row.id] = parsed;
+      }
+      // Override with fresh values
+      for (const integ of integrations) {
+        if (integ.id in freshMap) {
+          integ.brand_incremental = freshMap[integ.id] ?? null;
+        }
+      }
+    }
+  } catch {
+    // Non-fatal: fall back to sequential scan values already loaded above
   }
 
   // ── 3. Collect all brands that appear in any integration ─────────────────────
