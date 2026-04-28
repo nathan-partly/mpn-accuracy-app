@@ -109,6 +109,9 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   let integrations: Integration[] = [];
   try {
+    // NOTE: alias brand_incremental_json (not brand_incremental) avoids a Neon HTTP driver
+    // issue where aliasing a cast column with the original column name causes it to return
+    // the raw JSONB type instead of the cast text type in production environments.
     const rows = await sql`
       SELECT
         brands,
@@ -118,16 +121,21 @@ export async function GET(req: Request): Promise<NextResponse> {
         incremental_uk_pct::float  AS incremental_uk_pct,
         incremental_au_pct::float  AS incremental_au_pct,
         incremental_us_pct::float  AS incremental_us_pct,
-        brand_incremental::text AS brand_incremental
+        brand_incremental::text AS brand_incremental_json
       FROM data_integrations
       ORDER BY integration_date ASC
     `;
-    integrations = (rows as Array<Omit<Integration, "brand_incremental"> & { brand_incremental: string | BrandIncrementalMap | null }>).map((r) => ({
-      ...r,
-      brand_incremental: r.brand_incremental
-        ? (typeof r.brand_incremental === "string" ? JSON.parse(r.brand_incremental) : r.brand_incremental)
-        : null,
-    })) as Integration[];
+    integrations = (rows as Array<Omit<Integration, "brand_incremental"> & { brand_incremental_json: string | BrandIncrementalMap | null }>).map((r) => {
+      const raw = (r as Record<string, unknown>).brand_incremental_json;
+      let parsed: BrandIncrementalMap | null = null;
+      if (raw) {
+        try {
+          parsed = typeof raw === "string" ? JSON.parse(raw) : (raw as BrandIncrementalMap);
+        } catch { parsed = null; }
+      }
+      const { brand_incremental_json: _drop, ...rest } = r as Record<string, unknown> & { brand_incremental_json: unknown };
+      return { ...rest, brand_incremental: parsed } as unknown as Integration;
+    });
   } catch {
     integrations = [];
   }
