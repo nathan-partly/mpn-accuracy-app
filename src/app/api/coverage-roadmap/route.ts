@@ -210,5 +210,8 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
   }
 
-  return NextResponse.json({ data: topRows, quarters, market } satisfies RoadmapResponse);
+  return NextResponse.json(
+    { data: topRows, quarters, market } satisfies RoadmapResponse,
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
