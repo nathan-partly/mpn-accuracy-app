@@ -70,6 +70,7 @@ function regionKey(market: Market): string {
 export async function GET(req: Request): Promise<NextResponse> {
   const { searchParams } = new URL(req.url);
   const market = (searchParams.get("market") ?? "all") as Market;
+  const debugMode = searchParams.get("debug") === "1";
   const todayISO = new Date().toISOString().split("T")[0];
 
   // ── 1. Per-brand coverage from snapshot ───────────────────────────────────────
@@ -221,6 +222,28 @@ export async function GET(req: Request): Promise<NextResponse> {
     for (const q of quarters) {
       if (!(q in row)) row[q] = 0;
     }
+  }
+
+  if (debugMode) {
+    // Return raw intermediate state so we can see exactly what the deployed code computed
+    return NextResponse.json({
+      todayISO,
+      market,
+      integrationsCount: integrations.length,
+      futureIntegrations: integrations
+        .filter((i) => i.integration_date > todayISO)
+        .map((i) => ({
+          integration_date: i.integration_date,
+          brands: i.brands,
+          totalIncremental: marketIncremental(i, market),
+          brand_incremental_typeof: typeof i.brand_incremental,
+          brand_incremental_isNull: i.brand_incremental == null,
+          brand_incremental_value: i.brand_incremental,
+        })),
+      brandQuarterGains,
+      quartersFound: Object.keys(quartersFound),
+      integrationBrandsCount: Object.keys(integrationBrands).length,
+    }, { headers: { "Cache-Control": "no-store" } });
   }
 
   return NextResponse.json(
