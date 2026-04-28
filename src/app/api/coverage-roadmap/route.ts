@@ -19,11 +19,16 @@ function quarterSortKey(label: string): number {
   return yr * 10 + q;
 }
 
+/** Per-quarter integration sources shown in the tooltip */
+export type RoadmapBrandMeta = Record<string, string[]>; // quarter → integration names
+
 export interface RoadmapBrand {
   brand: string;
   today: number;
   totalVins: number;
-  [quarter: string]: number | string;
+  /** Integration names that contribute a gain in each quarter (for tooltip display) */
+  _meta: RoadmapBrandMeta;
+  [quarter: string]: number | string | RoadmapBrandMeta;
 }
 
 export interface RoadmapResponse {
@@ -36,6 +41,7 @@ type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null
 
 interface Integration {
   id: number;
+  name: string;
   brands: string[];
   integration_date: string;
   incremental_vio_pct: number | null;
@@ -116,6 +122,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     const rows = await sql`
       SELECT
         id,
+        name,
         brands,
         integration_date::text     AS integration_date,
         incremental_vio_pct::float AS incremental_vio_pct,
@@ -183,6 +190,8 @@ export async function GET(req: Request): Promise<NextResponse> {
   // We skip zero-gain entries so that a brand with no NZ data in an earlier integration
   // doesn't block a positive gain in a later one.
   const brandQuarterGains: Record<string, Record<string, number>> = {};
+  // Track which integration names contribute a gain per brand per quarter (for tooltip)
+  const brandQuarterIntegrations: Record<string, Record<string, string[]>> = {};
 
   for (const integ of integrations) {
     if (!integ.integration_date || integ.integration_date <= todayISO) continue;
@@ -211,6 +220,13 @@ export async function GET(req: Request): Promise<NextResponse> {
       if (perBrand > 0) {
         if (!brandQuarterGains[key]) brandQuarterGains[key] = {};
         brandQuarterGains[key][q] = (brandQuarterGains[key][q] ?? 0) + perBrand;
+
+        // Track integration name for tooltip
+        if (!brandQuarterIntegrations[key]) brandQuarterIntegrations[key] = {};
+        if (!brandQuarterIntegrations[key][q]) brandQuarterIntegrations[key][q] = [];
+        if (integ.name && !brandQuarterIntegrations[key][q].includes(integ.name)) {
+          brandQuarterIntegrations[key][q].push(integ.name);
+        }
       }
     }
   }
@@ -227,6 +243,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       brand,
       today: parseFloat(cov.today.toFixed(2)),
       totalVins: cov.totalVins,
+      _meta: brandQuarterIntegrations[brand] ?? {},
     };
 
     for (const [q, increment] of Object.entries(gains)) {

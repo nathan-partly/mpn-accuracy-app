@@ -10,7 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { RoadmapBrand, RoadmapResponse, Market } from "@/app/api/coverage-roadmap/route";
+import type { RoadmapBrand, RoadmapBrandMeta, RoadmapResponse, Market } from "@/app/api/coverage-roadmap/route";
 
 // ── Colours ───────────────────────────────────────────────────────────────────
 const TODAY_COLOR  = "#BBFCE8";
@@ -35,28 +35,39 @@ function CustomTooltip({
   active, payload, label,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; color: string }>;
+  payload?: Array<{ name: string; value: number; color: string; payload: RoadmapBrand }>;
   label?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
 
   const total = payload.reduce((s, e) => s + (e.value || 0), 0);
   const nonZero = payload.filter((e) => e.value > 0);
+  const meta = (payload[0]?.payload?._meta ?? {}) as RoadmapBrandMeta;
 
   return (
-    <div className="bg-white border border-grey-200 rounded-lg shadow-md px-3 py-2.5 text-xs min-w-40">
+    <div className="bg-white border border-grey-200 rounded-lg shadow-md px-3 py-2.5 text-xs min-w-48 max-w-64">
       <p className="font-bold text-grey-950 mb-2">{label}</p>
-      {nonZero.map((entry) => (
-        <div key={entry.name} className="flex items-center justify-between gap-4 mb-0.5">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-sm" style={{ background: entry.color }} />
-            <span className="text-grey-500">
-              {entry.name === "today" ? "Current coverage" : `Gain (${entry.name})`}
-            </span>
-          </span>
-          <span className="font-semibold text-grey-900 tabular-nums">{entry.value.toFixed(1)}%</span>
-        </div>
-      ))}
+      {nonZero.map((entry) => {
+        const integrations = entry.name !== "today" ? (meta[entry.name] ?? []) : [];
+        return (
+          <div key={entry.name} className="mb-1.5">
+            <div className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
+                <span className="text-grey-500">
+                  {entry.name === "today" ? "Current coverage" : `Gain (${entry.name})`}
+                </span>
+              </span>
+              <span className="font-semibold text-grey-900 tabular-nums">{entry.value.toFixed(1)}%</span>
+            </div>
+            {integrations.length > 0 && (
+              <p className="text-grey-400 ml-3.5 mt-0.5 leading-tight">
+                {integrations.join(", ")}
+              </p>
+            )}
+          </div>
+        );
+      })}
       <div className="flex justify-between gap-4 mt-1.5 pt-1.5 border-t border-grey-100">
         <span className="text-grey-500">Projected total</span>
         <span className="font-bold text-grey-950 tabular-nums">{Math.min(100, total).toFixed(1)}%</span>
