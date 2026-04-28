@@ -97,7 +97,7 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
   const fetchData = useCallback(async (m: Market) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/coverage-roadmap?market=${m}`, { cache: "no-store" });
+      const res = await fetch(`/api/coverage-roadmap?market=${m}&_t=${Date.now()}`, { cache: "no-store" });
       if (res.ok) setRoadmap(await res.json());
     } catch {
       // fail silently

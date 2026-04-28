@@ -117,11 +117,16 @@ export async function GET(req: Request): Promise<NextResponse> {
         incremental_uk_pct::float  AS incremental_uk_pct,
         incremental_au_pct::float  AS incremental_au_pct,
         incremental_us_pct::float  AS incremental_us_pct,
-        brand_incremental
+        brand_incremental::text AS brand_incremental
       FROM data_integrations
       ORDER BY integration_date ASC
     `;
-    integrations = rows as Integration[];
+    integrations = (rows as Array<Omit<Integration, "brand_incremental"> & { brand_incremental: string | BrandIncrementalMap | null }>).map((r) => ({
+      ...r,
+      brand_incremental: r.brand_incremental
+        ? (typeof r.brand_incremental === "string" ? JSON.parse(r.brand_incremental) : r.brand_incremental)
+        : null,
+    })) as Integration[];
   } catch {
     integrations = [];
   }
