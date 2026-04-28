@@ -225,11 +225,39 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   if (debugMode) {
+    // Also fetch raw DB values so we can compare pre/post parse
+    let rawDbRows: unknown[] = [];
+    try {
+      rawDbRows = (await sql`
+        SELECT id, brands, integration_date::text,
+               brand_incremental::text AS bi_text,
+               brand_incremental       AS bi_raw
+        FROM data_integrations
+        WHERE id IN (16, 19, 9, 10, 13)
+        ORDER BY id
+      `).map((r: Record<string, unknown>) => ({
+        id: r.id,
+        bi_text_typeof: typeof r.bi_text,
+        bi_text_value:  r.bi_text,
+        bi_raw_typeof:  typeof r.bi_raw,
+        bi_raw_isNull:  r.bi_raw == null,
+        parse_result: (() => {
+          try {
+            if (!r.bi_text) return null;
+            return JSON.parse(r.bi_text as string);
+          } catch (e) { return `PARSE_ERROR: ${e}`; }
+        })(),
+      }));
+    } catch (e) {
+      rawDbRows = [{ error: String(e) }];
+    }
+
     // Return raw intermediate state so we can see exactly what the deployed code computed
     return NextResponse.json({
       todayISO,
       market,
       integrationsCount: integrations.length,
+      rawDbRows,
       futureIntegrations: integrations
         .filter((i) => i.integration_date > todayISO)
         .map((i) => ({
