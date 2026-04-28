@@ -16,9 +16,9 @@ export async function GET() {
     // Also run a SELECT current_database() to confirm what DB we're actually on
   };
 
-  // Confirm live DB identity
+  // Confirm live DB identity + server fingerprint
   try {
-    const dbInfo = await sql`SELECT current_database() AS db, current_user AS usr, inet_server_addr()::text AS host`;
+    const dbInfo = await sql`SELECT current_database() AS db, current_user AS usr, inet_server_addr()::text AS host, pg_postmaster_start_time()::text AS server_started`;
     result.live_db_identity = dbInfo[0];
   } catch (e) { result.live_db_identity_error = String(e); }
 
