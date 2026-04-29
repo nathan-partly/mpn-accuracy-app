@@ -707,6 +707,10 @@ function blockRulesHtml(): string {
       _origHero(brands);
       adjustHero(brands);
     };
+    /* renderHero already ran before we got here — adjust the DOM immediately */
+    var currentBrands = (typeof DATA !== 'undefined' && typeof region !== 'undefined')
+      ? (DATA[region] || []) : [];
+    if (currentBrands.length > 0) adjustHero(currentBrands);
   }
 
   /* ── Hook into renderTable so we re-inject on every tab/sort change ── */
