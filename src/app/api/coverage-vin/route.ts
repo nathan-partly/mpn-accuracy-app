@@ -3,7 +3,9 @@ import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-// Ensure tables exist on every cold start
+// Ensure tables exist and columns are the right type on every cold start.
+// providers_found is stored as TEXT (comma-separated) — not TEXT[] — to avoid
+// the Neon HTTP driver's inability to serialize nested string[][] parameters.
 async function ensureTables() {
   await sql`
     CREATE TABLE IF NOT EXISTS coverage_vin_snapshots (
@@ -26,34 +28,40 @@ async function ensureTables() {
       year            TEXT,
       model           TEXT,
       market          TEXT,
-      providers_found TEXT[],
+      providers_found TEXT,
       rule_id         TEXT,
       rule_name       TEXT,
       rule_provider   TEXT
     )
   `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_cvd_snapshot ON coverage_vin_data(snapshot_id)
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS idx_cvd_make ON coverage_vin_data(snapshot_id, input_make)
-  `;
+  // Migrate column from text[] → text if the table was previously created with the old schema
+  try {
+    await sql`
+      ALTER TABLE coverage_vin_data
+        ALTER COLUMN providers_found TYPE TEXT
+        USING array_to_string(providers_found, ',')
+    `;
+  } catch {
+    // Already TEXT or doesn't exist yet — ignore
+  }
+  await sql`CREATE INDEX IF NOT EXISTS idx_cvd_snapshot ON coverage_vin_data(snapshot_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_cvd_make ON coverage_vin_data(snapshot_id, input_make)`;
 }
 
 interface CsvRow {
-  input_make: string;
-  input_region: string;
-  vin: string;
-  wmi: string;
-  gcs_found: boolean;
-  brand: string;
-  year: string;
-  model: string;
-  market: string;
-  providers_found: string[];
-  rule_id: string | null;
-  rule_name: string | null;
-  rule_provider: string | null;
+  input_make:      string;
+  input_region:    string;
+  vin:             string;
+  wmi:             string;
+  gcs_found:       boolean;
+  brand:           string;
+  year:            string;
+  model:           string;
+  market:          string;
+  providers_found: string; // comma-separated
+  rule_id:         string | null;
+  rule_name:       string | null;
+  rule_provider:   string | null;
 }
 
 function parseCsv(text: string): CsvRow[] {
@@ -63,51 +71,47 @@ function parseCsv(text: string): CsvRow[] {
   const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
   const idx = (name: string) => header.indexOf(name);
 
-  const iMake     = idx("input_make");
-  const iRegion   = idx("input_region");
-  const iVin      = idx("vin");
-  const iWmi      = idx("wmi");
-  const iFound    = idx("gcs_found");
-  const iBrand    = idx("brand");
-  const iYear     = idx("year");
-  const iModel    = idx("model");
-  const iMarket   = idx("market");
+  const iMake      = idx("input_make");
+  const iRegion    = idx("input_region");
+  const iVin       = idx("vin");
+  const iWmi       = idx("wmi");
+  const iFound     = idx("gcs_found");
+  const iBrand     = idx("brand");
+  const iYear      = idx("year");
+  const iModel     = idx("model");
+  const iMarket    = idx("market");
   const iProviders = idx("providers_found");
-  const iRuleId   = idx("rule_id");
-  const iRuleName = idx("rule_name");
-  const iRuleProv = idx("rule_provider");
+  const iRuleId    = idx("rule_id");
+  const iRuleName  = idx("rule_name");
+  const iRuleProv  = idx("rule_provider");
 
   const rows: CsvRow[] = [];
   for (let i = 1; i < lines.length; i++) {
-    // Simple CSV split (no quoted-field handling needed for this schema)
     const cols = lines[i].split(",");
     const make = cols[iMake]?.trim();
     if (!make) continue;
 
-    const rawProviders = cols[iProviders]?.trim() ?? "";
-    const providers = rawProviders ? rawProviders.split(",").map((p) => p.trim()).filter(Boolean) : [];
-    const ruleId = cols[iRuleId]?.trim() || null;
-
     rows.push({
       input_make:      make,
-      input_region:    cols[iRegion]?.trim() ?? "",
-      vin:             cols[iVin]?.trim() ?? "",
-      wmi:             cols[iWmi]?.trim() ?? "",
+      input_region:    cols[iRegion]?.trim()   ?? "",
+      vin:             cols[iVin]?.trim()       ?? "",
+      wmi:             cols[iWmi]?.trim()       ?? "",
       gcs_found:       (cols[iFound]?.trim() ?? "").toUpperCase() === "TRUE",
-      brand:           cols[iBrand]?.trim() ?? "",
-      year:            cols[iYear]?.trim() ?? "",
-      model:           cols[iModel]?.trim() ?? "",
-      market:          cols[iMarket]?.trim() ?? "",
-      providers_found: providers,
-      rule_id:         ruleId,
-      rule_name:       cols[iRuleName]?.trim() || null,
-      rule_provider:   cols[iRuleProv]?.trim() || null,
+      brand:           cols[iBrand]?.trim()     ?? "",
+      year:            cols[iYear]?.trim()      ?? "",
+      model:           cols[iModel]?.trim()     ?? "",
+      market:          cols[iMarket]?.trim()    ?? "",
+      // Store as plain comma-separated TEXT — no nested array serialization needed
+      providers_found: cols[iProviders]?.trim() ?? "",
+      rule_id:         cols[iRuleId]?.trim()    || null,
+      rule_name:       cols[iRuleName]?.trim()  || null,
+      rule_provider:   cols[iRuleProv]?.trim()  || null,
     });
   }
   return rows;
 }
 
-/** Bulk insert rows in chunks of 1000 using unnest */
+/** Bulk insert using unnest — all columns are flat scalars now */
 async function bulkInsert(snapshotId: number, rows: CsvRow[]) {
   const CHUNK = 1000;
   for (let offset = 0; offset < rows.length; offset += CHUNK) {
@@ -122,7 +126,7 @@ async function bulkInsert(snapshotId: number, rows: CsvRow[]) {
     const years      = chunk.map((r) => r.year);
     const models     = chunk.map((r) => r.model);
     const markets    = chunk.map((r) => r.market);
-    const providers  = chunk.map((r) => r.providers_found); // text[][]
+    const providers  = chunk.map((r) => r.providers_found); // plain string[]
     const ruleIds    = chunk.map((r) => r.rule_id);
     const ruleNames  = chunk.map((r) => r.rule_name);
     const ruleProvs  = chunk.map((r) => r.rule_provider);
@@ -142,7 +146,7 @@ async function bulkInsert(snapshotId: number, rows: CsvRow[]) {
         unnest(${years}::text[]),
         unnest(${models}::text[]),
         unnest(${markets}::text[]),
-        unnest(${providers}::text[][]),
+        unnest(${providers}::text[]),
         unnest(${ruleIds}::text[]),
         unnest(${ruleNames}::text[]),
         unnest(${ruleProvs}::text[])
@@ -179,7 +183,6 @@ export async function POST(req: NextRequest) {
     const rows = parseCsv(text);
     if (rows.length === 0) return NextResponse.json({ error: "CSV contained no valid rows" }, { status: 400 });
 
-    // Create snapshot record
     const [snap] = await sql`
       INSERT INTO coverage_vin_snapshots (row_count, filename)
       VALUES (${rows.length}, ${file.name})

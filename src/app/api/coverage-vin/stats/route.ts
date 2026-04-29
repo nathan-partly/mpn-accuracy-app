@@ -83,8 +83,10 @@ export async function GET(): Promise<NextResponse> {
       prov        AS provider,
       COUNT(*)::int AS cnt
     FROM coverage_vin_data,
-         LATERAL unnest(providers_found) AS prov
+         LATERAL unnest(string_to_array(providers_found, ',')) AS prov
     WHERE snapshot_id = ${snapshotId}
+      AND providers_found IS NOT NULL
+      AND providers_found <> ''
     GROUP BY input_make, prov
     ORDER BY input_make, cnt DESC
   ` as Array<{ brand: string; provider: string; cnt: number }>;
