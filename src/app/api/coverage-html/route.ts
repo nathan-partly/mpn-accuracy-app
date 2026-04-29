@@ -656,6 +656,39 @@ function blockRulesHtml(): string {
     });
   }
 
+  /* ── Adjust the hero banner (overall rate + Supported/Unsupported counts) ── */
+  function adjustHero(brands) {
+    var region = activeRegion();
+    var totalBlocked = 0;
+    brands.forEach(function (b) {
+      var impact = getImpact(norm(b.make), region);
+      if (impact > 0) totalBlocked += Math.round(b.total * impact / 100);
+    });
+    if (totalBlocked === 0) return;
+
+    var total      = brands.reduce(function (s, b) { return s + b.total; }, 0);
+    var covered    = brands.reduce(function (s, b) { return s + b.y; }, 0);
+    var adjCovered = Math.max(0, covered - totalBlocked);
+    var adjRate    = total ? (adjCovered / total * 100).toFixed(2) : '0.00';
+
+    var heroRate = document.getElementById('heroRate');
+    if (heroRate) heroRate.textContent = adjRate + '%';
+
+    var heroStats = document.getElementById('heroStats');
+    if (heroStats) {
+      var fmtN = typeof fmt === 'function' ? fmt : function (n) { return n.toLocaleString(); };
+      var minN = parseInt(((document.getElementById('minN') || {}).value) || '10');
+      var filteredCount = brands.filter(function (b) { return b.total >= minN; }).length;
+      heroStats.innerHTML = [
+        ['Supported',   fmtN(adjCovered)],
+        ['Unsupported', fmtN(total - adjCovered)],
+        ['Brands',      filteredCount],
+      ].map(function (r) {
+        return '<div class="hstat"><div class="hv">' + r[1] + '</div><div class="hl">' + r[0] + '</div></div>';
+      }).join('');
+    }
+  }
+
   function injectAll() {
     clearInjected();
     /* Clear the per-row injection guard so injectBars runs fresh */
@@ -664,6 +697,16 @@ function blockRulesHtml(): string {
     });
     injectBars();
     injectDrillSections();
+  }
+
+  /* ── Hook renderHero to adjust the headline numbers ── */
+  function hookRenderHero() {
+    if (typeof renderHero === 'undefined') { setTimeout(hookRenderHero, 80); return; }
+    var _origHero = renderHero;
+    renderHero = function (brands) {
+      _origHero(brands);
+      adjustHero(brands);
+    };
   }
 
   /* ── Hook into renderTable so we re-inject on every tab/sort change ── */
@@ -677,6 +720,7 @@ function blockRulesHtml(): string {
     injectAll();
   }
 
+  hookRenderHero();
   hookRenderTable();
 })();
 <\/script>`;
