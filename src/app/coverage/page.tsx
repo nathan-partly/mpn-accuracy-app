@@ -20,6 +20,15 @@ export default function CoveragePage() {
         </div>
         <div className="flex items-center gap-3">
           <Link
+            href="/coverage/dataset"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-grey-600 text-sm font-semibold rounded-lg border border-grey-200 hover:bg-grey-50 transition-colors flex-shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 0v10m0-10a2 2 0 012-2h2a2 2 0 012 2v10a2 2 0 01-2 2h-2a2 2 0 01-2-2" />
+            </svg>
+            VIN Dataset
+          </Link>
+          <Link
             href="/coverage/integrations"
             className="flex items-center gap-2 px-4 py-2 bg-white text-brand-blue text-sm font-semibold rounded-lg border border-brand-blue hover:bg-blue-50 transition-colors flex-shrink-0"
           >
