@@ -48,6 +48,34 @@ async function ensureTables() {
   await sql`CREATE INDEX IF NOT EXISTS idx_cvd_make ON coverage_vin_data(snapshot_id, input_make)`;
 }
 
+/** RFC 4180-compliant CSV line parser — handles quoted fields containing commas */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i <= line.length) {
+    if (i === line.length) { fields.push(""); break; }
+    if (line[i] === '"') {
+      // Quoted field
+      let field = "";
+      i++; // skip opening quote
+      while (i < line.length) {
+        if (line[i] === '"' && line[i + 1] === '"') { field += '"'; i += 2; }
+        else if (line[i] === '"') { i++; break; }
+        else { field += line[i++]; }
+      }
+      fields.push(field);
+      if (line[i] === ",") i++; else break;
+    } else {
+      // Unquoted field
+      const end = line.indexOf(",", i);
+      if (end === -1) { fields.push(line.slice(i)); break; }
+      fields.push(line.slice(i, end));
+      i = end + 1;
+    }
+  }
+  return fields;
+}
+
 interface CsvRow {
   input_make:      string;
   input_region:    string;
@@ -87,7 +115,7 @@ function parseCsv(text: string): CsvRow[] {
 
   const rows: CsvRow[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",");
+    const cols = parseCsvLine(lines[i]);
     const make = cols[iMake]?.trim();
     if (!make) continue;
 
