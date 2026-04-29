@@ -3,6 +3,16 @@ import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+export interface BlockRuleDetail {
+  region: string;
+  rule_id: string;
+  rule_name: string | null;
+  rule_provider: string | null;
+  blocked_count: number;
+  region_total: number;
+  impact_pct: number; // blocked_count / region_total * 100
+}
+
 export interface BrandVinStat {
   brand: string;
   total: number;
@@ -11,7 +21,8 @@ export interface BrandVinStat {
   not_found: number;
   coverage_pct: number;
   blocked_pct: number;
-  providers: Record<string, number>; // provider → VIN count
+  providers: Record<string, number>;
+  block_rules: BlockRuleDetail[];
 }
 
 export interface VinStatsResponse {
@@ -22,7 +33,6 @@ export interface VinStatsResponse {
 }
 
 export async function GET(): Promise<NextResponse> {
-  // Get latest snapshot
   let snapshotId: number | null = null;
   let uploadedAt: string | null = null;
   try {
@@ -34,7 +44,6 @@ export async function GET(): Promise<NextResponse> {
       uploadedAt = snap[0].uploaded_at;
     }
   } catch {
-    // tables don't exist yet
     return NextResponse.json({ snapshot_id: null, uploaded_at: null, total_vins: 0, brands: [] });
   }
 
@@ -42,7 +51,7 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ snapshot_id: null, uploaded_at: null, total_vins: 0, brands: [] });
   }
 
-  // Per-brand aggregate stats
+  // ── 1. Per-brand aggregate stats ───────────────────────────────────────────
   const brandRows = await sql`
     SELECT
       input_make                                                                     AS brand,
@@ -67,7 +76,7 @@ export async function GET(): Promise<NextResponse> {
     not_found: number; coverage_pct: number; blocked_pct: number;
   }>;
 
-  // Per-brand per-provider counts (unnest providers_found array)
+  // ── 2. Per-brand per-provider counts ───────────────────────────────────────
   const provRows = await sql`
     SELECT
       input_make  AS brand,
@@ -80,11 +89,55 @@ export async function GET(): Promise<NextResponse> {
     ORDER BY input_make, cnt DESC
   ` as Array<{ brand: string; provider: string; cnt: number }>;
 
-  // Build provider map: brand → { provider → count }
   const provMap: Record<string, Record<string, number>> = {};
   for (const r of provRows) {
     if (!provMap[r.brand]) provMap[r.brand] = {};
     provMap[r.brand][r.provider] = r.cnt;
+  }
+
+  // ── 3. Block rule breakdown: per (brand × region × rule) ──────────────────
+  // Join with per-(brand × region) totals so we can compute impact_pct.
+  const ruleRows = await sql`
+    WITH region_totals AS (
+      SELECT input_make, input_region, COUNT(*)::int AS region_total
+      FROM coverage_vin_data
+      WHERE snapshot_id = ${snapshotId}
+      GROUP BY input_make, input_region
+    )
+    SELECT
+      d.input_make                AS brand,
+      d.input_region              AS region,
+      d.rule_id,
+      d.rule_name,
+      d.rule_provider,
+      COUNT(*)::int               AS blocked_count,
+      rt.region_total,
+      ROUND(COUNT(*)::numeric / NULLIF(rt.region_total, 0) * 100, 1)::float AS impact_pct
+    FROM coverage_vin_data d
+    JOIN region_totals rt
+      ON rt.input_make = d.input_make AND rt.input_region = d.input_region
+    WHERE d.snapshot_id = ${snapshotId}
+      AND d.rule_id IS NOT NULL
+    GROUP BY d.input_make, d.input_region, d.rule_id, d.rule_name, d.rule_provider, rt.region_total
+    ORDER BY d.input_make, d.input_region, blocked_count DESC
+  ` as Array<{
+    brand: string; region: string; rule_id: string; rule_name: string | null;
+    rule_provider: string | null; blocked_count: number; region_total: number; impact_pct: number;
+  }>;
+
+  // Build rule map: brand → BlockRuleDetail[]
+  const ruleMap: Record<string, BlockRuleDetail[]> = {};
+  for (const r of ruleRows) {
+    if (!ruleMap[r.brand]) ruleMap[r.brand] = [];
+    ruleMap[r.brand].push({
+      region:        r.region,
+      rule_id:       r.rule_id,
+      rule_name:     r.rule_name,
+      rule_provider: r.rule_provider,
+      blocked_count: r.blocked_count,
+      region_total:  r.region_total,
+      impact_pct:    r.impact_pct ?? 0,
+    });
   }
 
   const totalVins = brandRows.reduce((s, r) => s + r.total, 0);
@@ -98,6 +151,7 @@ export async function GET(): Promise<NextResponse> {
     coverage_pct: r.coverage_pct ?? 0,
     blocked_pct:  r.blocked_pct ?? 0,
     providers:    provMap[r.brand] ?? {},
+    block_rules:  ruleMap[r.brand] ?? [],
   }));
 
   return NextResponse.json(
