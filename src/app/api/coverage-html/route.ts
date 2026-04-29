@@ -505,14 +505,6 @@ function integrationCountsHtml(): string {
 function blockRulesHtml(): string {
   return `
 <style>
-  .rate-blocked-seg {
-    display: inline-block;
-    height: 100%;
-    background: #F59E0B;
-    border-radius: 0 2px 2px 0;
-    vertical-align: top;
-  }
-  .rate-track { overflow: visible !important; position: relative; }
   .block-rule-badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 10px; font-weight: 600; color: #B45309;
@@ -529,21 +521,13 @@ function blockRulesHtml(): string {
     letter-spacing: .07em; color: #B45309; margin-bottom: 10px;
     display: flex; align-items: center; gap: 6px;
   }
-  .drill-block-region {
-    margin-bottom: 10px;
-  }
-  .drill-block-region-lbl {
-    font-size: 10px; font-weight: 700; color: #6B7280;
-    text-transform: uppercase; letter-spacing: .05em;
-    margin-bottom: 5px;
-  }
   .drill-block-rule {
     display: flex; align-items: center; justify-content: space-between;
     padding: 4px 8px; border-radius: 6px; background: #FFFBEB;
     border: 1px solid #FDE68A; margin-bottom: 4px;
     font-size: 11px; gap: 8px;
   }
-  .drill-block-rule-name { color: #374151; flex: 1; min-width: 0; }
+  .drill-block-rule-name { color: #374151; flex: 1; min-width: 0; font-weight: 600; }
   .drill-block-rule-pct  { font-weight: 700; color: #B45309; white-space: nowrap; }
   .drill-block-rule-bar  {
     width: 48px; height: 4px; background: #FDE68A;
@@ -581,45 +565,48 @@ function blockRulesHtml(): string {
     var entry = RULE_DATA[key];
     if (!entry) return 0;
     var r = region.toUpperCase();
-    /* Fall back to ALL if the specific region isn't present */
     return (r === 'ALL' || entry[r] == null) ? (entry['ALL'] || 0) : entry[r];
   }
 
-  /* ── Remove previously-injected elements so we can re-inject cleanly ── */
+  /* ── Remove our injected elements (badges + drill sections) ── */
   function clearInjected() {
-    document.querySelectorAll('.rate-blocked-seg, .block-rule-badge').forEach(function (el) { el.remove(); });
+    document.querySelectorAll('.block-rule-badge').forEach(function (el) { el.remove(); });
     document.querySelectorAll('.drill-block-section').forEach(function (el) { el.remove(); });
   }
 
-  /* ── Amber segment on the coverage bar ── */
+  /* ── Adjust the coverage bar and label in-place ── */
   function injectBars() {
     var region = activeRegion();
     document.querySelectorAll('.brand-row').forEach(function (row) {
+      /* Skip if we've already adjusted this row in this render cycle */
+      if (row.dataset.ruleInjected) return;
+      row.dataset.ruleInjected = '1';
+
       var nameCell = row.querySelector('.name-cell');
       if (!nameCell) return;
       var key    = norm(nameCell.textContent);
       var impact = getImpact(key, region);
       if (impact <= 0) return;
 
-      /* amber segment appended after blue fill */
-      var track = row.querySelector('.rate-track');
-      if (track && !track.querySelector('.rate-blocked-seg')) {
-        var fill = track.querySelector('.rate-fill');
-        var seg  = document.createElement('div');
-        seg.className = 'rate-blocked-seg';
-        var fillW = fill ? (parseFloat(fill.style.width) || 0) : 0;
-        seg.style.width = Math.min(impact, Math.max(0, 100 - fillW)) + '%';
-        seg.title = 'Blocked by rules: -' + impact.toFixed(1) + '%';
-        if (fill) track.insertBefore(seg, fill.nextSibling);
-        else track.appendChild(seg);
+      /* Shrink the blue fill bar by the impact amount */
+      var fill = row.querySelector('.rate-fill');
+      if (fill) {
+        var origW  = parseFloat(fill.style.width) || 0;
+        var adjW   = Math.max(0, origW - impact);
+        fill.style.width = adjW + '%';
       }
 
-      /* amber badge next to coverage % label */
+      /* Rewrite the coverage % label to the adjusted value */
       var lbl = row.querySelector('.rate-lbl');
-      if (lbl && !row.querySelector('.block-rule-badge')) {
+      if (lbl) {
+        var origPct = parseFloat(lbl.textContent) || 0;
+        var adjPct  = Math.max(0, origPct - impact);
+        lbl.textContent = adjPct.toFixed(1) + '%';
+
+        /* Small badge showing the deduction so users know why it's lower */
         var badge = document.createElement('span');
         badge.className = 'block-rule-badge';
-        badge.title = 'Coverage reduced by block rules';
+        badge.title = 'Adjusted for block rules (-' + impact.toFixed(1) + '% of VINs blocked in sample)';
         badge.innerHTML = '&#9888; -' + impact.toFixed(1) + '%';
         lbl.parentNode.insertBefore(badge, lbl.nextSibling);
       }
@@ -651,15 +638,13 @@ function blockRulesHtml(): string {
         + '<span style="font-size:9px;font-weight:400;color:#9CA3AF;margin-left:4px">VIN sample analysis</span>'
         + '</div>';
 
-      /* Show one row per available region */
       var regionsHtml = '';
-      var regionOrder = ['UK', 'NZ', 'US', 'AU'];
-      regionOrder.forEach(function (r) {
+      ['UK', 'NZ', 'US', 'AU'].forEach(function (r) {
         var pct = entry[r];
         if (pct == null || pct === 0) return;
-        var barW = Math.min(100, pct * 2); /* scale: 50% impact = full bar */
+        var barW = Math.min(100, pct * 2); /* 50% impact = full bar */
         regionsHtml += '<div class="drill-block-rule">'
-          + '<span class="drill-block-rule-name" style="font-weight:600;color:#6B7280">' + r + '</span>'
+          + '<span class="drill-block-rule-name">' + r + '</span>'
           + '<div class="drill-block-rule-bar"><div class="drill-block-rule-bar-fill" style="width:' + barW + '%"></div></div>'
           + '<span class="drill-block-rule-pct">-' + pct.toFixed(1) + '%</span>'
           + '</div>';
@@ -671,7 +656,15 @@ function blockRulesHtml(): string {
     });
   }
 
-  function injectAll() { clearInjected(); injectBars(); injectDrillSections(); }
+  function injectAll() {
+    clearInjected();
+    /* Clear the per-row injection guard so injectBars runs fresh */
+    document.querySelectorAll('.brand-row[data-rule-injected]').forEach(function (r) {
+      delete r.dataset.ruleInjected;
+    });
+    injectBars();
+    injectDrillSections();
+  }
 
   /* ── Hook into renderTable so we re-inject on every tab/sort change ── */
   function hookRenderTable() {
