@@ -197,8 +197,8 @@ export default function QualityUploadPage() {
         <h1 className="text-2xl font-bold text-grey-950">Upload Quality Snapshot</h1>
         <p className="text-grey-400 text-sm mt-1">
           Upload a CSV with coverage percentages and quality gate flags.{" "}
-          <a href="/quality-template.csv" download className="text-brand-blue hover:underline font-medium">
-            Download CSV template
+          <a href="/api/quality/export" download className="text-brand-blue hover:underline font-medium">
+            Download latest snapshot
           </a>
         </p>
       </div>
