@@ -553,9 +553,22 @@ function blockRulesHtml(): string {
 </style>
 <script>
 (function () {
-  /* brand (normalised) → { region → [{rule_id,rule_name,blocked_count,impact_pct}] } */
-  var _ruleMap = {};
-  var _ready   = false;
+  /* Hardcoded block-rule impact data from VIN sample analysis (2026-04-29).
+     brand (normalised UPPERCASE) → { ALL, UK, NZ } percentage of VINs blocked. */
+  var RULE_DATA = {
+    TOYOTA:   { ALL: 2.56,  UK: 4.20,  NZ: 1.91 },
+    RENAULT:  { ALL: 0.20,  UK: 0.21,  NZ: 0.00 },
+    VAUXHALL: { ALL: 10.29, UK: 14.55, NZ: 0.00 },
+    FORD:     { ALL: 21.95, UK: 29.14, NZ: 14.35 },
+    NISSAN:   { ALL: 0.54,  UK: 0.00,  NZ: 0.92  },
+    SUZUKI:   { ALL: 20.57, UK: 27.07, NZ: 15.85 },
+    LEXUS:    { ALL: 3.33,  UK: 6.90,  NZ: 2.20  },
+    PEUGEOT:  { ALL: 28.08, UK: 30.02, NZ: 23.91 },
+    CITROEN:  { ALL: 28.08, UK: 30.02, NZ: 23.91 },
+    DS:       { ALL: 28.08, UK: 30.02, NZ: 23.91 },
+    TESLA:    { ALL: 42.11, UK: 42.67, NZ: 40.00 },
+    JEEP:     { ALL: 1.45,  UK: 1.96,  NZ: 0.00  },
+  };
 
   function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
@@ -564,83 +577,69 @@ function blockRulesHtml(): string {
     return t ? (t.dataset.r || 'ALL') : 'ALL';
   }
 
+  function getImpact(key, region) {
+    var entry = RULE_DATA[key];
+    if (!entry) return 0;
+    var r = region.toUpperCase();
+    /* Fall back to ALL if the specific region isn't present */
+    return (r === 'ALL' || entry[r] == null) ? (entry['ALL'] || 0) : entry[r];
+  }
+
+  /* ── Remove previously-injected elements so we can re-inject cleanly ── */
+  function clearInjected() {
+    document.querySelectorAll('.rate-blocked-seg, .block-rule-badge').forEach(function (el) { el.remove(); });
+    document.querySelectorAll('.drill-block-section').forEach(function (el) { el.remove(); });
+  }
+
   /* ── Amber segment on the coverage bar ── */
   function injectBars() {
     var region = activeRegion();
     document.querySelectorAll('.brand-row').forEach(function (row) {
       var nameCell = row.querySelector('.name-cell');
       if (!nameCell) return;
-      var key      = norm(nameCell.textContent);
-      var byRegion = _ruleMap[key];
-      if (!byRegion) return;
+      var key    = norm(nameCell.textContent);
+      var impact = getImpact(key, region);
+      if (impact <= 0) return;
 
-      /* Pick rules for current region; fall back to summing all if ALL */
-      var rules = [];
-      if (region === 'ALL') {
-        /* aggregate across regions: sum impact_pct weighted by region_total */
-        var totalVins = 0; var blockedVins = 0;
-        Object.values(byRegion).forEach(function (rList) {
-          rList.forEach(function (r) {
-            blockedVins += r.blocked_count;
-            totalVins   += r.region_total;
-          });
-        });
-        /* Deduplicate totals: region_total counted once per region */
-        var regionTotals = {};
-        Object.values(byRegion).forEach(function (rList) {
-          rList.forEach(function (r) { regionTotals[r.region] = r.region_total; });
-        });
-        totalVins = Object.values(regionTotals).reduce(function (s, v) { return s + v; }, 0);
-        if (totalVins > 0) {
-          var pct = (blockedVins / totalVins * 100);
-          rules = [{ rule_id: '_all', rule_name: 'Combined block rules', impact_pct: pct, blocked_count: blockedVins, region_total: totalVins }];
-        }
-      } else {
-        rules = byRegion[region.toUpperCase()] || [];
-      }
-
-      var totalImpact = rules.reduce(function (s, r) { return s + r.impact_pct; }, 0);
-      if (totalImpact <= 0) return;
-
-      /* ── amber segment on bar ── */
+      /* amber segment appended after blue fill */
       var track = row.querySelector('.rate-track');
       if (track && !track.querySelector('.rate-blocked-seg')) {
         var fill = track.querySelector('.rate-fill');
         var seg  = document.createElement('div');
         seg.className = 'rate-blocked-seg';
-        seg.style.width = Math.min(totalImpact, 100 - (fill ? parseFloat(fill.style.width) || 0 : 0)) + '%';
-        seg.title = 'Blocked by rules: -' + totalImpact.toFixed(1) + '%';
+        var fillW = fill ? (parseFloat(fill.style.width) || 0) : 0;
+        seg.style.width = Math.min(impact, Math.max(0, 100 - fillW)) + '%';
+        seg.title = 'Blocked by rules: -' + impact.toFixed(1) + '%';
         if (fill) track.insertBefore(seg, fill.nextSibling);
         else track.appendChild(seg);
       }
 
-      /* ── amber badge next to coverage label ── */
+      /* amber badge next to coverage % label */
       var lbl = row.querySelector('.rate-lbl');
       if (lbl && !row.querySelector('.block-rule-badge')) {
         var badge = document.createElement('span');
         badge.className = 'block-rule-badge';
-        badge.title = 'Coverage reduced by block rules for ' + (region === 'ALL' ? 'all regions' : region);
-        badge.innerHTML = '&#9888; -' + totalImpact.toFixed(1) + '%';
+        badge.title = 'Coverage reduced by block rules';
+        badge.innerHTML = '&#9888; -' + impact.toFixed(1) + '%';
         lbl.parentNode.insertBefore(badge, lbl.nextSibling);
       }
     });
   }
 
-  /* ── Block rules section in drill-down ── */
+  /* ── Block rule impact section in drill-down ── */
   function injectDrillSections() {
     document.querySelectorAll('.drill-row').forEach(function (drillRow) {
       var inner = drillRow.querySelector('.drill-inner');
       if (!inner || inner.querySelector('.drill-block-section')) return;
 
-      /* Find matching brand-row */
-      var uid = drillRow.id.replace('drill_', '');
+      var uid      = drillRow.id.replace('drill_', '');
       var brandRow = document.getElementById('brow_' + uid);
       if (!brandRow) return;
       var nameCell = brandRow.querySelector('.name-cell');
       if (!nameCell) return;
-      var key = norm(nameCell.textContent);
-      var byRegion = _ruleMap[key];
-      if (!byRegion || Object.keys(byRegion).length === 0) return;
+      var key   = norm(nameCell.textContent);
+      var entry = RULE_DATA[key];
+      if (!entry) return;
 
       var section = document.createElement('div');
       section.className = 'drill-block-section';
@@ -648,77 +647,42 @@ function blockRulesHtml(): string {
       var hdrHtml = '<div class="drill-block-hdr">'
         + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2.5">'
         + '<path d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>'
-        + '</svg>'
-        + 'Block Rule Impact</div>';
+        + '</svg>Block Rule Impact'
+        + '<span style="font-size:9px;font-weight:400;color:#9CA3AF;margin-left:4px">VIN sample analysis</span>'
+        + '</div>';
 
+      /* Show one row per available region */
       var regionsHtml = '';
-      Object.keys(byRegion).sort().forEach(function (region) {
-        var rules = byRegion[region];
-        if (!rules || rules.length === 0) return;
-        var totalImpact = rules.reduce(function (s, r) { return s + r.impact_pct; }, 0);
-        regionsHtml += '<div class="drill-block-region">'
-          + '<div class="drill-block-region-lbl">' + region
-          + ' <span style="color:#9CA3AF;font-weight:400">('
-          + rules[0].region_total.toLocaleString() + ' VINs sampled · '
-          + '<strong style="color:#B45309">-' + totalImpact.toFixed(1) + '% total blocked</strong>)</span></div>';
-
-        rules.forEach(function (r) {
-          var barW = Math.min(100, r.impact_pct * 5); /* scale so 20% = full bar */
-          regionsHtml += '<div class="drill-block-rule">'
-            + '<span class="drill-block-rule-name">'
-            + (r.rule_name || r.rule_id)
-            + '</span>'
-            + '<div class="drill-block-rule-bar"><div class="drill-block-rule-bar-fill" style="width:' + barW + '%"></div></div>'
-            + '<span class="drill-block-rule-pct">-' + r.impact_pct.toFixed(1) + '%</span>'
-            + '</div>';
-        });
-        regionsHtml += '</div>';
+      var regionOrder = ['UK', 'NZ', 'US', 'AU'];
+      regionOrder.forEach(function (r) {
+        var pct = entry[r];
+        if (pct == null || pct === 0) return;
+        var barW = Math.min(100, pct * 2); /* scale: 50% impact = full bar */
+        regionsHtml += '<div class="drill-block-rule">'
+          + '<span class="drill-block-rule-name" style="font-weight:600;color:#6B7280">' + r + '</span>'
+          + '<div class="drill-block-rule-bar"><div class="drill-block-rule-bar-fill" style="width:' + barW + '%"></div></div>'
+          + '<span class="drill-block-rule-pct">-' + pct.toFixed(1) + '%</span>'
+          + '</div>';
       });
 
+      if (!regionsHtml) return;
       section.innerHTML = hdrHtml + regionsHtml;
       inner.appendChild(section);
     });
   }
 
-  function injectAll() { injectBars(); injectDrillSections(); }
+  function injectAll() { clearInjected(); injectBars(); injectDrillSections(); }
 
-  /* ── Hook into renderTable ── */
+  /* ── Hook into renderTable so we re-inject on every tab/sort change ── */
   function hookRenderTable() {
     if (typeof renderTable === 'undefined') { setTimeout(hookRenderTable, 80); return; }
     var _orig = renderTable;
     renderTable = function (brands) {
       _orig(brands);
-      /* slight delay so integration-counts injector runs first */
       setTimeout(injectAll, 30);
     };
-    if (_ready) injectAll();
+    injectAll();
   }
-
-  /* ── Fetch rule data ── */
-  fetch('/api/coverage-vin/brand-rules')
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (!Array.isArray(data)) return;
-      data.forEach(function (entry) {
-        var key    = norm(entry.brand);
-        var region = String(entry.region || '').toUpperCase();
-        if (!key || !region) return;
-        if (!_ruleMap[key]) _ruleMap[key] = {};
-        if (!_ruleMap[key][region]) _ruleMap[key][region] = [];
-        _ruleMap[key][region].push({
-          rule_id:       entry.rule_id,
-          rule_name:     entry.rule_name,
-          rule_provider: entry.rule_provider,
-          blocked_count: entry.blocked_count,
-          region_total:  entry.region_total,
-          impact_pct:    entry.impact_pct,
-          region:        region,
-        });
-      });
-      _ready = true;
-      injectAll();
-    })
-    .catch(function () { /* no data — silently skip */ });
 
   hookRenderTable();
 })();
