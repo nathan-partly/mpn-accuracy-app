@@ -739,9 +739,10 @@ function injectTrendChart(html: string): string {
 }
 
 // ── VIN insights injection ────────────────────────────────────────────────────
-// Fetches /api/coverage-vin/insights and injects a "VIN Insights" section into
-// each brand's drill-down. Shows model coverage % and WMI/assembly plant
-// coverage with manufacturer names — both sorted worst-first.
+// Fetches /api/coverage-vin/insights and renders three clean tables per brand:
+//   1. Year coverage sparkline (decoded from VIN position 10)
+//   2. Model coverage table
+//   3. WMI / assembly plant coverage table
 function vinInsightsHtml(): string {
   return `
 <style>
@@ -749,39 +750,60 @@ function vinInsightsHtml(): string {
     margin-top: 14px; padding-top: 14px;
     border-top: 1px solid #F0F0F5;
   }
-  .drill-insights-hdr {
+  .vi-hdr {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .07em; color: #3632FF; margin-bottom: 12px;
     display: flex; align-items: center; gap: 6px;
   }
-  .drill-insights-sub {
+  .vi-sub {
     font-size: 9px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .06em; color: #9CA3AF; margin-bottom: 8px;
+    letter-spacing: .06em; color: #9CA3AF; margin-bottom: 6px;
   }
-  .vi-two-col {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px;
+  .vi-divider { margin-top: 14px; padding-top: 12px; border-top: 1px solid #F0F0F5; }
+
+  /* Year sparkline */
+  .vi-year-wrap { display: flex; align-items: flex-end; gap: 3px; height: 32px; margin-bottom: 4px; }
+  .vi-year-bar  { flex: 1; border-radius: 2px 2px 0 0; min-width: 6px; cursor: default; transition: opacity .15s; }
+  .vi-year-bar:hover { opacity: .75; }
+  .vi-year-legend {
+    display: flex; gap: 10px; align-items: center; margin-top: 4px;
   }
-  .vi-bar-row { margin-bottom: 6px; }
-  .vi-bar-meta {
-    display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+  .vi-year-leg-dot {
+    width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 3px;
   }
-  .vi-bar-name {
-    font-size: 11px; color: #374151; flex: 1; min-width: 0;
+
+  /* Coverage tables */
+  .vi-table {
+    width: 100%; border-collapse: collapse; font-size: 11px;
+    table-layout: fixed;
+  }
+  .vi-table th {
+    text-align: left; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em;
+    color: #9CA3AF; padding: 0 8px 5px 0; border-bottom: 1px solid #F0F0F5;
+    white-space: nowrap;
+  }
+  .vi-table th.r { text-align: right; }
+  .vi-table td {
+    padding: 5px 8px 5px 0; border-bottom: 1px solid #F8F8FB;
+    vertical-align: middle; color: #374151;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .vi-bar-sub { font-size: 9px; color: #9CA3AF; white-space: nowrap; }
-  .vi-bar-pct { font-size: 10px; font-weight: 700; white-space: nowrap; }
-  .vi-bar-track {
-    height: 4px; background: #F3F4F6; border-radius: 2px; overflow: hidden;
+  .vi-table td.r { text-align: right; white-space: nowrap; }
+  .vi-table tr:last-child td { border-bottom: none; }
+  .vi-pct-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .vi-pct-bar  { width: 48px; height: 4px; background: #F3F4F6; border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+  .vi-pct-fill { height: 100%; border-radius: 2px; }
+  .vi-pct-val  { font-weight: 700; font-size: 10px; width: 32px; text-align: right; flex-shrink: 0; }
+  .vi-code     { font-family: monospace; font-size: 9px; font-weight: 700;
+                 color: #9CA3AF; margin-right: 4px; }
+  .vi-vins     { font-size: 9px; color: #9CA3AF; }
+
+  /* Two-column layout for model + WMI tables */
+  .vi-tables-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;
   }
-  .vi-bar-fill { height: 100%; border-radius: 2px; }
-  .vi-wmi-code {
-    font-size: 9px; font-weight: 700; color: #9CA3AF;
-    font-family: monospace; flex-shrink: 0;
-  }
-  .vi-section-gap {
-    margin-top: 14px; padding-top: 12px; border-top: 1px solid #F0F0F5;
-  }
+  .vi-col-full { margin-top: 14px; padding-top: 12px; border-top: 1px solid #F0F0F5; }
 </style>
 <script>
 (function () {
@@ -793,30 +815,90 @@ function vinInsightsHtml(): string {
     document.querySelectorAll('.drill-insights-section').forEach(function (el) { el.remove(); });
   }
 
-  function pctColor(pct) {
-    if (pct >= 80) return '#10B981';
-    if (pct >= 40) return '#F59E0B';
-    return '#EF4444';
+  function pctColor(p) {
+    return p >= 80 ? '#10B981' : p >= 40 ? '#F59E0B' : '#EF4444';
   }
 
-  /* name and sub are plain text — no HTML allowed */
-  function barRow(name, sub, pct, wmiCode) {
-    var color  = pctColor(pct);
-    var pctStr = pct.toFixed(0) + '%';
-    var nameHtml = wmiCode
-      ? '<span class="vi-wmi-code">' + wmiCode + '</span>'
-        + '<span class="vi-bar-name">' + name + '</span>'
-      : '<span class="vi-bar-name">' + name + '</span>';
-    return '<div class="vi-bar-row">'
-      + '<div class="vi-bar-meta">'
-        + nameHtml
-        + '<span class="vi-bar-sub">' + sub + '</span>'
-        + '<span class="vi-bar-pct" style="color:' + color + '">' + pctStr + '</span>'
-      + '</div>'
-      + '<div class="vi-bar-track">'
-        + '<div class="vi-bar-fill" style="width:' + pct + '%;background:' + color + '"></div>'
-      + '</div>'
+  function pctCell(pct) {
+    var color = pctColor(pct);
+    return '<td class="r">'
+      + '<div class="vi-pct-cell">'
+      + '<div class="vi-pct-bar"><div class="vi-pct-fill" style="width:' + pct + '%;background:' + color + '"></div></div>'
+      + '<span class="vi-pct-val" style="color:' + color + '">' + pct.toFixed(0) + '%</span>'
+      + '</div></td>';
+  }
+
+  /* ── Year sparkline ── */
+  function yearSparkline(yc) {
+    if (!yc || yc.length === 0) return '';
+    var maxTotal = 0;
+    yc.forEach(function (y) { if (y.total > maxTotal) maxTotal = y.total; });
+    if (maxTotal === 0) return '';
+
+    var bars = yc.map(function (y) {
+      var h    = Math.max(4, Math.round((y.total / maxTotal) * 32));
+      var color = pctColor(y.pct);
+      var tip   = y.year + ': ' + y.pct.toFixed(0) + '% coverage (' + y.covered + '/' + y.total + ' VINs)';
+      return '<div class="vi-year-bar" style="height:' + h + 'px;background:' + color + '" title="' + tip + '"></div>';
+    }).join('');
+
+    var firstYear = yc[0].year;
+    var lastYear  = yc[yc.length - 1].year;
+
+    return '<div class="vi-sub">Year Coverage &nbsp;<span style="font-weight:400;color:#6B7280">'
+      + firstYear + ' – ' + lastYear + '</span></div>'
+      + '<div class="vi-year-wrap">' + bars + '</div>'
+      + '<div class="vi-year-legend">'
+      + '<span style="font-size:9px;color:#9CA3AF"><span class="vi-year-leg-dot" style="background:#10B981"></span>≥80%</span>'
+      + '<span style="font-size:9px;color:#9CA3AF"><span class="vi-year-leg-dot" style="background:#F59E0B"></span>40–79%</span>'
+      + '<span style="font-size:9px;color:#9CA3AF"><span class="vi-year-leg-dot" style="background:#EF4444"></span>&lt;40%</span>'
       + '</div>';
+  }
+
+  /* ── Model table ── */
+  function modelTable(mc) {
+    if (!mc || mc.length === 0) return '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No data</span>';
+    var rows = mc.slice(0, 12).map(function (m) {
+      return '<tr>'
+        + '<td title="' + m.model + '">' + m.model + '</td>'
+        + '<td class="r"><span class="vi-vins">' + m.total + '</span></td>'
+        + pctCell(m.pct)
+        + '</tr>';
+    }).join('');
+    return '<table class="vi-table">'
+      + '<colgroup><col style="width:auto"><col style="width:40px"><col style="width:100px"></colgroup>'
+      + '<thead><tr>'
+      + '<th>Model</th>'
+      + '<th class="r">VINs</th>'
+      + '<th class="r">Coverage</th>'
+      + '</tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table>';
+  }
+
+  /* ── WMI table ── */
+  function wmiTable(wc) {
+    if (!wc || wc.length === 0) return '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No data</span>';
+    var rows = wc.map(function (w) {
+      var nameCell = w.manufacturer
+        ? '<td title="' + w.wmi + ' – ' + w.manufacturer + '">'
+          + '<span class="vi-code">' + w.wmi + '</span>' + w.manufacturer + '</td>'
+        : '<td><span class="vi-code">' + w.wmi + '</span></td>';
+      return '<tr>'
+        + nameCell
+        + '<td class="r"><span class="vi-vins">' + w.total + '</span></td>'
+        + pctCell(w.pct)
+        + '</tr>';
+    }).join('');
+    return '<table class="vi-table">'
+      + '<colgroup><col style="width:auto"><col style="width:40px"><col style="width:100px"></colgroup>'
+      + '<thead><tr>'
+      + '<th>Assembly Plant</th>'
+      + '<th class="r">VINs</th>'
+      + '<th class="r">Coverage</th>'
+      + '</tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table>';
   }
 
   function injectInsights() {
@@ -837,64 +919,30 @@ function vinInsightsHtml(): string {
 
       var mc = insight.model_coverage || [];
       var wc = insight.wmi_coverage   || [];
-      if (mc.length === 0 && wc.length === 0) return;
-
-      /* ── Model coverage ── */
-      var modelsHtml = '';
-      if (mc.length === 0) {
-        modelsHtml = '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No model data</span>';
-      } else {
-        /* If spread > 10%, show worst 3 + best 3; otherwise just show all (up to 8) */
-        var minPct = mc[0].pct;
-        var maxPct = mc[mc.length - 1].pct;
-        var hasSpread = (maxPct - minPct) > 10;
-        var items;
-        if (!hasSpread || mc.length <= 6) {
-          items = mc.slice(0, 8);
-        } else {
-          /* worst 3 then best 3, with a divider */
-          var worst = mc.slice(0, 3);
-          var best  = mc.slice(-3).reverse();
-          items = worst.concat([null]).concat(best); /* null = divider */
-        }
-        modelsHtml = '<div class="vi-two-col">';
-        items.forEach(function (m) {
-          if (!m) {
-            modelsHtml += '<div style="grid-column:1/-1;height:1px;background:#F0F0F5;margin:4px 0"></div>';
-            return;
-          }
-          modelsHtml += barRow(m.model, m.total + ' VINs', m.pct, null);
-        });
-        modelsHtml += '</div>';
-      }
-
-      /* ── WMI coverage ── */
-      var wmisHtml = '';
-      if (wc.length === 0) {
-        wmisHtml = '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No WMI data</span>';
-      } else {
-        wmisHtml = '<div class="vi-two-col">';
-        wc.forEach(function (w) {
-          var label = w.manufacturer || w.wmi;
-          wmisHtml += barRow(label, w.total + ' VINs', w.pct, w.manufacturer ? w.wmi : null);
-        });
-        wmisHtml += '</div>';
-      }
+      var yc = insight.year_coverage  || [];
+      if (mc.length === 0 && wc.length === 0 && yc.length === 0) return;
 
       var section = document.createElement('div');
       section.className = 'drill-insights-section';
       section.innerHTML =
-        '<div class="drill-insights-hdr">'
+        '<div class="vi-hdr">'
           + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3632FF" stroke-width="2.5">'
           + '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
           + 'VIN Insights'
           + '<span style="font-size:9px;font-weight:400;color:#9CA3AF;margin-left:4px">from sample analysis</span>'
         + '</div>'
-        + '<div class="drill-insights-sub">Model Coverage</div>'
-        + modelsHtml
-        + '<div class="vi-section-gap">'
-          + '<div class="drill-insights-sub">Coverage by WMI / Assembly Plant</div>'
-          + wmisHtml
+        /* Year sparkline — full width above tables */
+        + (yc.length > 0 ? yearSparkline(yc) + '<div style="margin-bottom:14px"></div>' : '')
+        /* Two-column: models | WMIs */
+        + '<div class="vi-tables-row">'
+          + '<div>'
+            + '<div class="vi-sub">Model Coverage</div>'
+            + modelTable(mc)
+          + '</div>'
+          + '<div>'
+            + '<div class="vi-sub">Assembly Plant (WMI)</div>'
+            + wmiTable(wc)
+          + '</div>'
         + '</div>';
 
       inner.appendChild(section);
