@@ -66,6 +66,7 @@ export async function GET(): Promise<NextResponse> {
         WHERE snapshot_id = ${snapshotId}
           AND input_make <> ''
           AND LENGTH(TRIM(vin)) = 17
+          AND UPPER(SUBSTRING(TRIM(vin), 1, 3)) <> '7AT'
       )
       SELECT
         brand,
@@ -110,7 +111,11 @@ export async function GET(): Promise<NextResponse> {
     const wmiRows = await sql`
       SELECT
         UPPER(input_make)                                                     AS brand,
-        CASE WHEN LENGTH(TRIM(vin)) = 17 THEN wmi ELSE 'JDM' END             AS wmi,
+        CASE
+          WHEN LENGTH(TRIM(vin)) != 17                           THEN 'JDM'
+          WHEN UPPER(SUBSTRING(TRIM(vin), 1, 3)) = '7AT'        THEN 'JDM'
+          ELSE wmi
+        END                                                                   AS wmi,
         COUNT(*) FILTER (WHERE gcs_found = true  AND rule_id IS NULL)::int   AS covered,
         COUNT(*)::int                                                         AS total,
         ROUND(
@@ -120,7 +125,12 @@ export async function GET(): Promise<NextResponse> {
       FROM coverage_vin_data
       WHERE snapshot_id = ${snapshotId}
         AND input_make <> ''
-      GROUP BY UPPER(input_make), CASE WHEN LENGTH(TRIM(vin)) = 17 THEN wmi ELSE 'JDM' END
+      GROUP BY UPPER(input_make),
+        CASE
+          WHEN LENGTH(TRIM(vin)) != 17                           THEN 'JDM'
+          WHEN UPPER(SUBSTRING(TRIM(vin), 1, 3)) = '7AT'        THEN 'JDM'
+          ELSE wmi
+        END
       HAVING COUNT(*) >= 3
       ORDER BY UPPER(input_make), pct ASC, total DESC
     ` as Array<{ brand: string; wmi: string; covered: number; total: number; pct: number }>;
