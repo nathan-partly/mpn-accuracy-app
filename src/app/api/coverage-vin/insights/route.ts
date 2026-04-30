@@ -65,7 +65,7 @@ export async function GET(): Promise<NextResponse> {
         FROM coverage_vin_data
         WHERE snapshot_id = ${snapshotId}
           AND input_make <> ''
-          AND LENGTH(vin) >= 10
+          AND LENGTH(TRIM(vin)) = 17
       )
       SELECT
         brand,
