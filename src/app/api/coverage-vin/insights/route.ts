@@ -85,22 +85,22 @@ export async function GET(): Promise<NextResponse> {
     ` as Array<{ brand: string; vin_year: string; covered: number; not_found: number; total: number; pct: number }>;
 
     // ── 2. Model coverage (all models ≥3 VINs, sorted pct ASC) ───────────────
+    // VINs with no model name are grouped under '(unknown)' so their coverage
+    // still appears rather than being silently dropped.
     const modelRows = await sql`
       SELECT
-        UPPER(input_make) AS brand,
-        model,
-        COUNT(*) FILTER (WHERE gcs_found = true  AND rule_id IS NULL)::int   AS covered,
-        COUNT(*)::int                                                         AS total,
+        UPPER(input_make)                                                      AS brand,
+        COALESCE(NULLIF(TRIM(model), ''), '(unknown)')                         AS model,
+        COUNT(*) FILTER (WHERE gcs_found = true  AND rule_id IS NULL)::int    AS covered,
+        COUNT(*)::int                                                          AS total,
         ROUND(
           100.0 * COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)
           / NULLIF(COUNT(*), 0)
-        , 1)::float                                                           AS pct
+        , 1)::float                                                            AS pct
       FROM coverage_vin_data
       WHERE snapshot_id = ${snapshotId}
         AND input_make <> ''
-        AND model      <> ''
-        AND model IS NOT NULL
-      GROUP BY UPPER(input_make), model
+      GROUP BY UPPER(input_make), COALESCE(NULLIF(TRIM(model), ''), '(unknown)')
       HAVING COUNT(*) >= 3
       ORDER BY UPPER(input_make), pct ASC, total DESC
     ` as Array<{ brand: string; model: string; covered: number; total: number; pct: number }>;

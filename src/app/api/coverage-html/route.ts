@@ -872,8 +872,10 @@ function vinInsightsHtml(): string {
   function modelTable(mc) {
     if (!mc || mc.length === 0) return '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No data</span>';
     var rows = mc.map(function (m) {
+      var isUnknown = m.model === '(unknown)';
+      var nameStyle = isUnknown ? 'color:#9CA3AF;font-style:italic' : '';
       return '<tr>'
-        + '<td title="' + m.model + '">' + m.model + '</td>'
+        + '<td title="' + m.model + '" style="' + nameStyle + '">' + m.model + '</td>'
         + '<td class="r"><span class="vi-vins">' + m.total + '</span></td>'
         + pctCell(m.pct)
         + '</tr>';
