@@ -738,12 +738,225 @@ function injectTrendChart(html: string): string {
   return html.slice(0, idx) + trendChartHtml() + "\n" + html.slice(idx);
 }
 
+// ── VIN insights injection ────────────────────────────────────────────────────
+// Fetches /api/coverage-vin/insights and injects a "VIN Insights" section into
+// each brand's drill-down showing year coverage range, gap models, gap WMIs.
+function vinInsightsHtml(): string {
+  return `
+<style>
+  .drill-insights-section {
+    margin-top: 14px; padding-top: 14px;
+    border-top: 1px solid #F0F0F5;
+  }
+  .drill-insights-hdr {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: #3632FF; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .drill-insights-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .drill-insights-sub {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #6B7280; margin-bottom: 6px;
+  }
+  .year-range-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; margin-bottom: 6px;
+  }
+  .year-range-val {
+    font-weight: 700; color: #1F1F1F;
+  }
+  .year-sparkline {
+    display: flex; align-items: flex-end; gap: 1px;
+    height: 22px; margin-bottom: 6px;
+  }
+  .year-spark-bar {
+    flex: 1; border-radius: 1px 1px 0 0; min-width: 3px;
+    position: relative;
+  }
+  .gap-year-pills {
+    display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+  }
+  .gap-year-pill {
+    font-size: 9px; font-weight: 600; color: #DC2626;
+    background: #FEF2F2; border: 1px solid #FECACA;
+    border-radius: 4px; padding: 1px 5px;
+  }
+  .insight-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 3px 7px; border-radius: 5px;
+    font-size: 11px; gap: 8px; margin-bottom: 3px;
+    background: #F8F9FF; border: 1px solid #E8EAFF;
+  }
+  .insight-item-name { color: #374151; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .insight-item-count { font-weight: 700; color: #DC2626; white-space: nowrap;
+    font-size: 10px; }
+  .insight-wmi-name { font-family: monospace; font-size: 10px; color: #374151;
+    flex: 1; }
+</style>
+<script>
+(function () {
+  var _insights = null; /* brand (UPPER) → BrandInsight */
+
+  function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  function clearInsights() {
+    document.querySelectorAll('.drill-insights-section').forEach(function (el) { el.remove(); });
+  }
+
+  function buildYearSparkline(yearCoverage) {
+    if (!yearCoverage || yearCoverage.length === 0) return '';
+    var maxTotal = Math.max.apply(null, yearCoverage.map(function (y) { return y.total; }));
+    if (maxTotal === 0) return '';
+    var bars = yearCoverage.map(function (y) {
+      var h = Math.round((y.total / maxTotal) * 22);
+      var covPct = y.total > 0 ? y.covered / y.total : 0;
+      var color = covPct === 0 ? '#FCA5A5' : covPct < 0.5 ? '#FCD34D' : '#6EE7B7';
+      return '<div class="year-spark-bar" style="height:' + h + 'px;background:' + color
+        + ';max-width:10px" title="' + y.year + ': ' + y.covered + ' covered, '
+        + y.not_found + ' not found"></div>';
+    }).join('');
+    return '<div class="year-sparkline">' + bars + '</div>';
+  }
+
+  function injectInsights() {
+    if (!_insights) return;
+
+    document.querySelectorAll('.drill-row').forEach(function (drillRow) {
+      var inner = drillRow.querySelector('.drill-inner');
+      if (!inner || inner.querySelector('.drill-insights-section')) return;
+
+      var uid      = drillRow.id.replace('drill_', '');
+      var brandRow = document.getElementById('brow_' + uid);
+      if (!brandRow) return;
+      var nameCell = brandRow.querySelector('.name-cell');
+      if (!nameCell) return;
+      var key     = norm(nameCell.textContent);
+      var insight = _insights[key];
+      if (!insight) return;
+
+      /* ── Year coverage ── */
+      var yearRangeHtml = '';
+      if (insight.year_min || insight.year_max) {
+        var rangeStr = (insight.year_min || '?') + '–' + (insight.year_max || '?');
+        yearRangeHtml += '<div class="year-range-row">'
+          + '<span class="year-range-val">' + rangeStr + '</span>'
+          + '<span style="color:#9CA3AF;font-size:10px">model years covered</span></div>';
+      }
+      yearRangeHtml += buildYearSparkline(insight.year_coverage);
+      if (insight.gap_years && insight.gap_years.length > 0) {
+        var pills = insight.gap_years.slice(0, 12).map(function (y) {
+          return '<span class="gap-year-pill">' + y + '</span>';
+        }).join('');
+        if (insight.gap_years.length > 12) pills += '<span class="gap-year-pill">+' + (insight.gap_years.length - 12) + ' more</span>';
+        yearRangeHtml += '<div style="font-size:9px;color:#9CA3AF;margin-bottom:3px;font-weight:600">UNCOVERED YEARS</div>'
+          + '<div class="gap-year-pills">' + pills + '</div>';
+      }
+
+      /* ── Gap models ── */
+      var modelsHtml = '';
+      if (insight.gap_models && insight.gap_models.length > 0) {
+        modelsHtml = insight.gap_models.map(function (m) {
+          return '<div class="insight-item">'
+            + '<span class="insight-item-name">' + m.model + '</span>'
+            + '<span class="insight-item-count">' + m.not_found + ' VINs</span>'
+            + '</div>';
+        }).join('');
+      } else {
+        modelsHtml = '<span style="font-size:10px;color:#9CA3AF">No model gaps</span>';
+      }
+
+      /* ── Gap WMIs ── */
+      var wmisHtml = '';
+      if (insight.gap_wmis && insight.gap_wmis.length > 0) {
+        wmisHtml = insight.gap_wmis.map(function (w) {
+          return '<div class="insight-item">'
+            + '<span class="insight-wmi-name">' + w.wmi + '</span>'
+            + '<span class="insight-item-count">' + w.not_found + ' VINs</span>'
+            + '</div>';
+        }).join('');
+        /* Append manufacturing markets below WMIs if present */
+        if (insight.gap_markets && insight.gap_markets.length > 0) {
+          wmisHtml += '<div style="font-size:9px;color:#9CA3AF;margin-top:6px;margin-bottom:3px;font-weight:600">MARKETS</div>';
+          wmisHtml += insight.gap_markets.map(function (m) {
+            return '<div class="insight-item">'
+              + '<span class="insight-item-name">' + m.market + '</span>'
+              + '<span class="insight-item-count">' + m.not_found + ' VINs</span>'
+              + '</div>';
+          }).join('');
+        }
+      } else {
+        wmisHtml = '<span style="font-size:10px;color:#9CA3AF">No WMI gaps</span>';
+      }
+
+      var section = document.createElement('div');
+      section.className = 'drill-insights-section';
+      section.innerHTML = '<div class="drill-insights-hdr">'
+        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3632FF" stroke-width="2.5">'
+        + '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+        + 'VIN Insights'
+        + '<span style="font-size:9px;font-weight:400;color:#9CA3AF;margin-left:4px">from sample analysis · not-supported VINs only</span>'
+        + '</div>'
+        + '<div class="drill-insights-grid">'
+          + '<div>'
+            + '<div class="drill-insights-sub">Year Coverage</div>'
+            + yearRangeHtml
+          + '</div>'
+          + '<div>'
+            + '<div class="drill-insights-sub">Gap Models</div>'
+            + modelsHtml
+          + '</div>'
+          + '<div style="grid-column:1/-1">'
+            + '<div class="drill-insights-sub">Unsupported WMIs &amp; Regions</div>'
+            + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+            + wmisHtml
+            + '</div>'
+          + '</div>'
+        + '</div>';
+      inner.appendChild(section);
+    });
+  }
+
+  /* Re-run on every renderTable call */
+  function hookRenderTable() {
+    if (typeof renderTable === 'undefined') { setTimeout(hookRenderTable, 80); return; }
+    var _orig = renderTable;
+    renderTable = function (brands) {
+      _orig(brands);
+      setTimeout(function () { clearInsights(); injectInsights(); }, 60);
+    };
+    if (_insights) injectInsights();
+  }
+
+  fetch('/api/coverage-vin/insights')
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      _insights = data || {};
+      injectInsights();
+    })
+    .catch(function () { /* no data */ });
+
+  hookRenderTable();
+})();
+<\/script>`;
+}
+
 // ── Inject integration counts before </body> ──────────────────────────────────
 function injectIntegrationCounts(html: string): string {
   const MARKER = '</body>';
   const idx = html.lastIndexOf(MARKER);
   if (idx === -1) return html;
-  return html.slice(0, idx) + integrationCountsHtml() + "\n" + blockRulesHtml() + "\n" + html.slice(idx);
+  return (
+    html.slice(0, idx) +
+    integrationCountsHtml() + "\n" +
+    blockRulesHtml() + "\n" +
+    vinInsightsHtml() + "\n" +
+    html.slice(idx)
+  );
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
