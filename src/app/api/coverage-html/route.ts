@@ -977,7 +977,10 @@ function vinInsightsHtml(): string {
   fetch('/api/coverage-vin/insights')
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      _insights = data || {};
+      /* Normalise keys so "LAND ROVER" → "LANDROVER" matches norm(nameCell) */
+      var raw = data || {};
+      _insights = {};
+      Object.keys(raw).forEach(function (k) { _insights[norm(k)] = raw[k]; });
       injectInsights();
     })
     .catch(function () { /* no data */ });
