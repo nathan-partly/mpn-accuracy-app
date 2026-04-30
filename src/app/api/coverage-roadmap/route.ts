@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { getLatestCoverageDataJson } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -80,26 +79,58 @@ export async function GET(req: Request): Promise<NextResponse> {
   const debugMode = searchParams.get("debug") === "1";
   const todayISO = new Date().toISOString().split("T")[0];
 
-  // ── 1. Per-brand coverage from snapshot ───────────────────────────────────────
+  // ── 1. Per-brand coverage from VIN sample data (block-rule-adjusted) ──────────
+  // Query coverage_vin_data directly so we can apply `rule_id IS NULL` — this
+  // excludes VINs whose "coverage" came from a block rule match rather than genuine
+  // GCS lookup, matching the adjusted figures shown on the main VIN Coverage Dashboard.
   const brandCoverage: Record<string, { today: number; totalVins: number }> = {};
   try {
-    const dataJson = await getLatestCoverageDataJson();
-    if (dataJson) {
-      const parsed = JSON.parse(dataJson) as Record<
-        string,
-        Array<{ make: string; yv: string[]; nv: string[] }>
-      >;
-      const key = regionKey(market);
-      // Fall back to NZ if the requested region key isn't in this snapshot
-      const regionBrands = parsed[key] ?? parsed[key.toLowerCase()] ?? parsed["NZ"] ?? parsed["nz"] ?? [];
-      for (const entry of regionBrands) {
-        const total = (entry.yv?.length ?? 0) + (entry.nv?.length ?? 0);
-        const pct = total > 0 ? (entry.yv.length / total) * 100 : 0;
-        brandCoverage[entry.make.toUpperCase()] = { today: pct, totalVins: total };
+    // Get latest VIN snapshot id
+    const snapRows = await sql`
+      SELECT id FROM coverage_vin_snapshots
+      ORDER BY uploaded_at DESC LIMIT 1
+    `;
+    if (snapRows.length > 0) {
+      const snapId = (snapRows[0] as { id: number }).id;
+
+      // For a specific market, filter by that region; for "all", aggregate across all regions.
+      // totalVins = total VINs regardless of rule_id (the full VIO universe for this brand/market)
+      // covered   = VINs where gcs_found = true AND no block rule applied
+      let brandRows: Array<{ brand: string; covered: string; total: string }>;
+
+      if (market === "all") {
+        brandRows = (await sql`
+          SELECT
+            UPPER(input_make)                                                   AS brand,
+            COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text AS covered,
+            COUNT(*)::text                                                      AS total
+          FROM coverage_vin_data
+          WHERE snapshot_id = ${snapId}
+          GROUP BY UPPER(input_make)
+        `) as Array<{ brand: string; covered: string; total: string }>;
+      } else {
+        const regionFilter = regionKey(market); // "NZ" | "UK" | "AU" | "US"
+        brandRows = (await sql`
+          SELECT
+            UPPER(input_make)                                                   AS brand,
+            COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text AS covered,
+            COUNT(*)::text                                                      AS total
+          FROM coverage_vin_data
+          WHERE snapshot_id = ${snapId}
+            AND UPPER(input_region) = UPPER(${regionFilter})
+          GROUP BY UPPER(input_make)
+        `) as Array<{ brand: string; covered: string; total: string }>;
+      }
+
+      for (const row of brandRows) {
+        const total   = parseInt(row.total,   10) || 0;
+        const covered = parseInt(row.covered, 10) || 0;
+        const pct     = total > 0 ? (covered / total) * 100 : 0;
+        brandCoverage[row.brand] = { today: pct, totalVins: total };
       }
     }
   } catch {
-    // No snapshot — all brands show 0% today
+    // No VIN snapshot — all brands show 0% today
   }
 
   // ── 2. Integrations — ensure market columns exist before selecting them ────────
