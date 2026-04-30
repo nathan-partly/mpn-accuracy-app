@@ -1,32 +1,31 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { lookupWmi } from "@/lib/wmi-lookup";
 
 export const dynamic = "force-dynamic";
 
 export interface BrandInsight {
-  year_min: string | null;       // earliest year with covered VINs
-  year_max: string | null;       // latest year with covered VINs
-  gap_years: string[];           // years where 0 covered but >0 not-found
-  year_coverage: Array<{        // per-year breakdown for sparkline
+  year_min: string | null;        // earliest year with covered VINs
+  year_max: string | null;        // latest year with covered VINs
+  gap_years: string[];            // years where 0 covered but >0 not-found
+  year_coverage: Array<{          // per-year breakdown for sparkline
     year: string;
     covered: number;
     not_found: number;
     total: number;
   }>;
-  gap_models: Array<{            // models with most uncovered VINs
+  model_coverage: Array<{         // all models ≥3 VINs, sorted by pct ASC
     model: string;
-    not_found: number;
+    covered: number;
     total: number;
+    pct: number;                  // 0–100 coverage %
   }>;
-  gap_wmis: Array<{              // WMIs (mfr+region) with most uncovered VINs
+  wmi_coverage: Array<{           // all WMIs ≥3 VINs, sorted by pct ASC
     wmi: string;
-    not_found: number;
+    manufacturer: string;         // human-readable name from WMI lookup
+    covered: number;
     total: number;
-  }>;
-  gap_markets: Array<{           // manufacturing markets with most uncovered VINs
-    market: string;
-    not_found: number;
-    total: number;
+    pct: number;                  // 0–100 coverage %
   }>;
 }
 
@@ -61,59 +60,47 @@ export async function GET(): Promise<NextResponse> {
       ORDER BY UPPER(input_make), year
     ` as Array<{ brand: string; year: string; covered: number; not_found: number; total: number }>;
 
-    // ── 2. Gap models per brand (top 6 with most not-found VINs) ─────────────
+    // ── 2. Model coverage per brand (all models ≥3 VINs, sorted pct ASC) ─────
     const modelRows = await sql`
       SELECT
         UPPER(input_make) AS brand,
         model,
-        COUNT(*) FILTER (WHERE gcs_found = false AND rule_id IS NULL)::int   AS not_found,
-        COUNT(*)::int                                                         AS total
+        COUNT(*) FILTER (WHERE gcs_found = true  AND rule_id IS NULL)::int   AS covered,
+        COUNT(*)::int                                                         AS total,
+        ROUND(
+          100.0 * COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)
+          / NULLIF(COUNT(*), 0)
+        , 1)::float                                                           AS pct
       FROM coverage_vin_data
       WHERE snapshot_id = ${snapshotId}
         AND input_make <> ''
         AND model      <> ''
         AND model IS NOT NULL
-        AND gcs_found = false
-        AND rule_id IS NULL
       GROUP BY UPPER(input_make), model
-      ORDER BY UPPER(input_make), not_found DESC
-    ` as Array<{ brand: string; model: string; not_found: number; total: number }>;
+      HAVING COUNT(*) >= 3
+      ORDER BY UPPER(input_make), pct ASC, total DESC
+    ` as Array<{ brand: string; model: string; covered: number; total: number; pct: number }>;
 
-    // ── 3. Gap WMIs per brand (top 6) ─────────────────────────────────────────
+    // ── 3. WMI coverage per brand (all WMIs ≥3 VINs, sorted pct ASC) ─────────
     const wmiRows = await sql`
       SELECT
         UPPER(input_make) AS brand,
         wmi,
-        COUNT(*) FILTER (WHERE gcs_found = false AND rule_id IS NULL)::int   AS not_found,
-        COUNT(*)::int                                                         AS total
+        COUNT(*) FILTER (WHERE gcs_found = true  AND rule_id IS NULL)::int   AS covered,
+        COUNT(*)::int                                                         AS total,
+        ROUND(
+          100.0 * COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)
+          / NULLIF(COUNT(*), 0)
+        , 1)::float                                                           AS pct
       FROM coverage_vin_data
       WHERE snapshot_id = ${snapshotId}
         AND input_make <> ''
         AND wmi        <> ''
         AND wmi IS NOT NULL
-        AND gcs_found = false
-        AND rule_id IS NULL
       GROUP BY UPPER(input_make), wmi
-      ORDER BY UPPER(input_make), not_found DESC
-    ` as Array<{ brand: string; wmi: string; not_found: number; total: number }>;
-
-    // ── 4. Gap markets per brand ───────────────────────────────────────────────
-    const marketRows = await sql`
-      SELECT
-        UPPER(input_make) AS brand,
-        market,
-        COUNT(*) FILTER (WHERE gcs_found = false AND rule_id IS NULL)::int   AS not_found,
-        COUNT(*)::int                                                         AS total
-      FROM coverage_vin_data
-      WHERE snapshot_id = ${snapshotId}
-        AND input_make <> ''
-        AND market     <> ''
-        AND market IS NOT NULL
-        AND gcs_found = false
-        AND rule_id IS NULL
-      GROUP BY UPPER(input_make), market
-      ORDER BY UPPER(input_make), not_found DESC
-    ` as Array<{ brand: string; market: string; not_found: number; total: number }>;
+      HAVING COUNT(*) >= 3
+      ORDER BY UPPER(input_make), pct ASC, total DESC
+    ` as Array<{ brand: string; wmi: string; covered: number; total: number; pct: number }>;
 
     // ── Build per-brand map ───────────────────────────────────────────────────
     const brandMap: Record<string, BrandInsight> = {};
@@ -123,7 +110,7 @@ export async function GET(): Promise<NextResponse> {
         brandMap[b] = {
           year_min: null, year_max: null,
           gap_years: [], year_coverage: [],
-          gap_models: [], gap_wmis: [], gap_markets: [],
+          model_coverage: [], wmi_coverage: [],
         };
       }
       return brandMap[b];
@@ -142,38 +129,40 @@ export async function GET(): Promise<NextResponse> {
       }
     }
 
-    // Models — top 6 per brand
+    // Models — up to 20 per brand (sorted pct ASC, so worst-first for client to slice)
     const modelSeen: Record<string, number> = {};
     for (const r of modelRows) {
       modelSeen[r.brand] = (modelSeen[r.brand] ?? 0);
-      if (modelSeen[r.brand] < 6) {
-        ensureBrand(r.brand).gap_models.push({ model: r.model, not_found: r.not_found, total: r.total });
+      if (modelSeen[r.brand] < 20) {
+        ensureBrand(r.brand).model_coverage.push({
+          model: r.model,
+          covered: r.covered,
+          total: r.total,
+          pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
+        });
         modelSeen[r.brand]++;
       }
     }
 
-    // WMIs — top 6 per brand
+    // WMIs — up to 15 per brand, with manufacturer name lookup
     const wmiSeen: Record<string, number> = {};
     for (const r of wmiRows) {
       wmiSeen[r.brand] = (wmiSeen[r.brand] ?? 0);
-      if (wmiSeen[r.brand] < 6) {
-        ensureBrand(r.brand).gap_wmis.push({ wmi: r.wmi, not_found: r.not_found, total: r.total });
+      if (wmiSeen[r.brand] < 15) {
+        ensureBrand(r.brand).wmi_coverage.push({
+          wmi: r.wmi,
+          manufacturer: lookupWmi(r.wmi),
+          covered: r.covered,
+          total: r.total,
+          pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
+        });
         wmiSeen[r.brand]++;
       }
     }
 
-    // Markets — top 5 per brand
-    const mktSeen: Record<string, number> = {};
-    for (const r of marketRows) {
-      mktSeen[r.brand] = (mktSeen[r.brand] ?? 0);
-      if (mktSeen[r.brand] < 5) {
-        ensureBrand(r.brand).gap_markets.push({ market: r.market, not_found: r.not_found, total: r.total });
-        mktSeen[r.brand]++;
-      }
-    }
-
     return NextResponse.json(brandMap, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (err) {
+    console.error("VIN insights error:", err);
     return NextResponse.json({}, { headers: { "Cache-Control": "no-store" } });
   }
 }
