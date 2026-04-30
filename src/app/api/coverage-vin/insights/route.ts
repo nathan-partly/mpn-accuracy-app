@@ -105,10 +105,12 @@ export async function GET(): Promise<NextResponse> {
     ` as Array<{ brand: string; model: string; covered: number; total: number; pct: number }>;
 
     // ── 3. WMI coverage (all WMIs ≥3 VINs, sorted pct ASC) ──────────────────
+    // Non-17-char VINs are Japanese Domestic Market chassis codes — group them
+    // all under the synthetic WMI "JDM" rather than showing raw chassis prefixes.
     const wmiRows = await sql`
       SELECT
-        UPPER(input_make) AS brand,
-        wmi,
+        UPPER(input_make)                                                     AS brand,
+        CASE WHEN LENGTH(TRIM(vin)) = 17 THEN wmi ELSE 'JDM' END             AS wmi,
         COUNT(*) FILTER (WHERE gcs_found = true  AND rule_id IS NULL)::int   AS covered,
         COUNT(*)::int                                                         AS total,
         ROUND(
@@ -118,9 +120,7 @@ export async function GET(): Promise<NextResponse> {
       FROM coverage_vin_data
       WHERE snapshot_id = ${snapshotId}
         AND input_make <> ''
-        AND wmi        <> ''
-        AND wmi IS NOT NULL
-      GROUP BY UPPER(input_make), wmi
+      GROUP BY UPPER(input_make), CASE WHEN LENGTH(TRIM(vin)) = 17 THEN wmi ELSE 'JDM' END
       HAVING COUNT(*) >= 3
       ORDER BY UPPER(input_make), pct ASC, total DESC
     ` as Array<{ brand: string; wmi: string; covered: number; total: number; pct: number }>;
@@ -165,7 +165,7 @@ export async function GET(): Promise<NextResponse> {
       if (wmiSeen[r.brand] < 15) {
         ensureBrand(r.brand).wmi_coverage.push({
           wmi: r.wmi,
-          manufacturer: lookupWmi(r.wmi),
+          manufacturer: r.wmi === "JDM" ? "Japanese Domestic Market" : lookupWmi(r.wmi),
           covered: r.covered,
           total: r.total,
           pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
