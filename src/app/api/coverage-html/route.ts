@@ -740,10 +740,8 @@ function injectTrendChart(html: string): string {
 
 // ── VIN insights injection ────────────────────────────────────────────────────
 // Fetches /api/coverage-vin/insights and injects a "VIN Insights" section into
-// each brand's drill-down. Shows:
-//   • Year coverage range + sparkline
-//   • Model coverage: worst and best performers (coverage %)
-//   • WMI coverage: sorted by %, with manufacturer names
+// each brand's drill-down. Shows model coverage % and WMI/assembly plant
+// coverage with manufacturer names — both sorted worst-first.
 function vinInsightsHtml(): string {
   return `
 <style>
@@ -756,81 +754,38 @@ function vinInsightsHtml(): string {
     letter-spacing: .07em; color: #3632FF; margin-bottom: 12px;
     display: flex; align-items: center; gap: 6px;
   }
-  .drill-insights-grid {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 16px;
-    align-items: start;
-  }
   .drill-insights-sub {
     font-size: 9px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .06em; color: #9CA3AF; margin-bottom: 8px;
   }
-  /* Year sparkline */
-  .year-range-pill {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: #F0F4FF; border: 1px solid #C7D2FE;
-    border-radius: 6px; padding: 2px 8px;
-    font-size: 11px; font-weight: 700; color: #3730A3;
-    margin-bottom: 8px;
+  .vi-two-col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px;
   }
-  .year-sparkline {
-    display: flex; align-items: flex-end; gap: 2px;
-    height: 28px; margin-bottom: 6px;
-  }
-  .year-spark-bar {
-    flex: 1; border-radius: 2px 2px 0 0; min-width: 4px; cursor: default;
-  }
-  .gap-year-pills {
-    display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
-  }
-  .gap-year-pill {
-    font-size: 9px; font-weight: 600; color: #DC2626;
-    background: #FEF2F2; border: 1px solid #FECACA;
-    border-radius: 4px; padding: 1px 5px;
-  }
-  /* Coverage bar rows */
-  .vi-bar-row {
-    margin-bottom: 5px;
-  }
+  .vi-bar-row { margin-bottom: 6px; }
   .vi-bar-meta {
-    display: flex; align-items: baseline; gap: 4px;
-    margin-bottom: 2px;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
   }
   .vi-bar-name {
     font-size: 11px; color: #374151; flex: 1; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .vi-bar-sub {
-    font-size: 9px; color: #9CA3AF; white-space: nowrap; flex-shrink: 0;
-  }
-  .vi-bar-pct {
-    font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
-  }
+  .vi-bar-sub { font-size: 9px; color: #9CA3AF; white-space: nowrap; }
+  .vi-bar-pct { font-size: 10px; font-weight: 700; white-space: nowrap; }
   .vi-bar-track {
     height: 4px; background: #F3F4F6; border-radius: 2px; overflow: hidden;
   }
-  .vi-bar-fill {
-    height: 100%; border-radius: 2px; transition: width .3s;
-  }
-  /* WMI grid */
-  .vi-wmi-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
-    margin-top: 4px;
-  }
+  .vi-bar-fill { height: 100%; border-radius: 2px; }
   .vi-wmi-code {
-    font-size: 9px; font-weight: 700; letter-spacing: .04em;
-    color: #6B7280; font-family: monospace; margin-right: 4px;
+    font-size: 9px; font-weight: 700; color: #9CA3AF;
+    font-family: monospace; flex-shrink: 0;
   }
-  /* Section dividers within insights */
-  .vi-wmi-section {
-    margin-top: 14px; padding-top: 12px;
-    border-top: 1px solid #F0F0F5;
+  .vi-section-gap {
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid #F0F0F5;
   }
 </style>
 <script>
 (function () {
-  var _insights = null; /* brand (UPPER) → BrandInsight */
+  var _insights = null;
 
   function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 
@@ -838,44 +793,30 @@ function vinInsightsHtml(): string {
     document.querySelectorAll('.drill-insights-section').forEach(function (el) { el.remove(); });
   }
 
-  /* ── colour helper: green ≥80, amber ≥40, red <40 ── */
   function pctColor(pct) {
     if (pct >= 80) return '#10B981';
     if (pct >= 40) return '#F59E0B';
     return '#EF4444';
   }
 
-  /* ── single coverage bar row ── */
-  function barRowHtml(name, pct, subLabel) {
-    var color = pctColor(pct);
+  /* name and sub are plain text — no HTML allowed */
+  function barRow(name, sub, pct, wmiCode) {
+    var color  = pctColor(pct);
     var pctStr = pct.toFixed(0) + '%';
+    var nameHtml = wmiCode
+      ? '<span class="vi-wmi-code">' + wmiCode + '</span>'
+        + '<span class="vi-bar-name">' + name + '</span>'
+      : '<span class="vi-bar-name">' + name + '</span>';
     return '<div class="vi-bar-row">'
       + '<div class="vi-bar-meta">'
-        + '<span class="vi-bar-name" title="' + name + '">' + name + '</span>'
-        + (subLabel ? '<span class="vi-bar-sub">' + subLabel + '</span>' : '')
+        + nameHtml
+        + '<span class="vi-bar-sub">' + sub + '</span>'
         + '<span class="vi-bar-pct" style="color:' + color + '">' + pctStr + '</span>'
       + '</div>'
       + '<div class="vi-bar-track">'
         + '<div class="vi-bar-fill" style="width:' + pct + '%;background:' + color + '"></div>'
       + '</div>'
       + '</div>';
-  }
-
-  /* ── year sparkline ── */
-  function buildYearSparkline(yearCoverage) {
-    if (!yearCoverage || yearCoverage.length === 0) return '';
-    var maxTotal = 0;
-    yearCoverage.forEach(function (y) { if (y.total > maxTotal) maxTotal = y.total; });
-    if (maxTotal === 0) return '';
-    var bars = yearCoverage.map(function (y) {
-      var h = Math.max(3, Math.round((y.total / maxTotal) * 28));
-      var covPct = y.total > 0 ? (y.covered / y.total) : 0;
-      var color = covPct === 0 ? '#FCA5A5' : covPct < 0.5 ? '#FCD34D' : '#6EE7B7';
-      var totalPct = y.total > 0 ? (covPct * 100).toFixed(0) : '0';
-      return '<div class="year-spark-bar" style="height:' + h + 'px;background:' + color + '"'
-        + ' title="' + y.year + ': ' + totalPct + '% coverage (' + y.covered + '/' + y.total + ')"></div>';
-    }).join('');
-    return '<div class="year-sparkline">' + bars + '</div>';
   }
 
   function injectInsights() {
@@ -894,111 +835,72 @@ function vinInsightsHtml(): string {
       var insight = _insights[key];
       if (!insight) return;
 
-      /* ── Year coverage column ── */
-      var yearHtml = '';
-      var spark = buildYearSparkline(insight.year_coverage);
-      if (spark) {
-        var rangeStr = (insight.year_min || '?') + '–' + (insight.year_max || '?');
-        yearHtml += '<div class="year-range-pill">'
-          + '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">'
-          + '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'
-          + rangeStr
-          + '</div>';
-        yearHtml += spark;
-        /* Legend */
-        yearHtml += '<div style="display:flex;gap:8px;margin-top:4px">'
-          + '<span style="font-size:9px;color:#9CA3AF;display:flex;align-items:center;gap:3px">'
-          + '<span style="width:8px;height:8px;background:#6EE7B7;border-radius:1px;display:inline-block"></span>High</span>'
-          + '<span style="font-size:9px;color:#9CA3AF;display:flex;align-items:center;gap:3px">'
-          + '<span style="width:8px;height:8px;background:#FCD34D;border-radius:1px;display:inline-block"></span>Partial</span>'
-          + '<span style="font-size:9px;color:#9CA3AF;display:flex;align-items:center;gap:3px">'
-          + '<span style="width:8px;height:8px;background:#FCA5A5;border-radius:1px;display:inline-block"></span>None</span>'
-          + '</div>';
-        if (insight.gap_years && insight.gap_years.length > 0) {
-          var pills = insight.gap_years.slice(0, 10).map(function (y) {
-            return '<span class="gap-year-pill">' + y + '</span>';
-          }).join('');
-          if (insight.gap_years.length > 10) {
-            pills += '<span class="gap-year-pill">+' + (insight.gap_years.length - 10) + '</span>';
-          }
-          yearHtml += '<div style="font-size:9px;color:#9CA3AF;margin-top:8px;margin-bottom:3px;font-weight:700;letter-spacing:.05em">ZERO COVERAGE</div>'
-            + '<div class="gap-year-pills">' + pills + '</div>';
-        }
-      } else {
-        yearHtml = '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No year data</span>';
-      }
-
-      /* ── Model coverage column ── */
-      var modelsHtml = '';
       var mc = insight.model_coverage || [];
+      var wc = insight.wmi_coverage   || [];
+      if (mc.length === 0 && wc.length === 0) return;
+
+      /* ── Model coverage ── */
+      var modelsHtml = '';
       if (mc.length === 0) {
         modelsHtml = '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No model data</span>';
       } else {
-        /* worst = first N (sorted ASC), best = last N */
-        var showAll = mc.length <= 6;
-        var worst = mc.slice(0, showAll ? mc.length : 3);
-        var best  = showAll ? [] : mc.slice(-3).reverse(); /* highest first */
-
-        if (!showAll) {
-          modelsHtml += '<div style="font-size:9px;font-weight:700;letter-spacing:.05em;color:#EF4444;margin-bottom:5px;text-transform:uppercase">Lowest Coverage</div>';
+        /* If spread > 10%, show worst 3 + best 3; otherwise just show all (up to 8) */
+        var minPct = mc[0].pct;
+        var maxPct = mc[mc.length - 1].pct;
+        var hasSpread = (maxPct - minPct) > 10;
+        var items;
+        if (!hasSpread || mc.length <= 6) {
+          items = mc.slice(0, 8);
+        } else {
+          /* worst 3 then best 3, with a divider */
+          var worst = mc.slice(0, 3);
+          var best  = mc.slice(-3).reverse();
+          items = worst.concat([null]).concat(best); /* null = divider */
         }
-        modelsHtml += worst.map(function (m) {
-          return barRowHtml(m.model, m.pct, m.total + ' VINs');
-        }).join('');
-
-        if (best.length > 0) {
-          modelsHtml += '<div style="font-size:9px;font-weight:700;letter-spacing:.05em;color:#10B981;margin-top:10px;margin-bottom:5px;text-transform:uppercase">Highest Coverage</div>';
-          modelsHtml += best.map(function (m) {
-            return barRowHtml(m.model, m.pct, m.total + ' VINs');
-          }).join('');
-        }
+        modelsHtml = '<div class="vi-two-col">';
+        items.forEach(function (m) {
+          if (!m) {
+            modelsHtml += '<div style="grid-column:1/-1;height:1px;background:#F0F0F5;margin:4px 0"></div>';
+            return;
+          }
+          modelsHtml += barRow(m.model, m.total + ' VINs', m.pct, null);
+        });
+        modelsHtml += '</div>';
       }
 
-      /* ── WMI coverage (full-width row) ── */
+      /* ── WMI coverage ── */
       var wmisHtml = '';
-      var wc = insight.wmi_coverage || [];
       if (wc.length === 0) {
         wmisHtml = '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No WMI data</span>';
       } else {
-        /* two-column grid of bar rows */
-        var wmiItems = wc.map(function (w) {
-          var label = w.manufacturer
-            ? '<span class="vi-wmi-code">' + w.wmi + '</span>' + w.manufacturer
-            : w.wmi;
-          return barRowHtml(label, w.pct, w.total + ' VINs');
-        }).join('');
-        wmisHtml = '<div class="vi-wmi-grid">' + wmiItems + '</div>';
+        wmisHtml = '<div class="vi-two-col">';
+        wc.forEach(function (w) {
+          var label = w.manufacturer || w.wmi;
+          wmisHtml += barRow(label, w.total + ' VINs', w.pct, w.manufacturer ? w.wmi : null);
+        });
+        wmisHtml += '</div>';
       }
 
       var section = document.createElement('div');
       section.className = 'drill-insights-section';
-      section.innerHTML = '<div class="drill-insights-hdr">'
-        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3632FF" stroke-width="2.5">'
-        + '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
-        + 'VIN Insights'
-        + '<span style="font-size:9px;font-weight:400;color:#9CA3AF;margin-left:4px">from sample analysis</span>'
+      section.innerHTML =
+        '<div class="drill-insights-hdr">'
+          + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3632FF" stroke-width="2.5">'
+          + '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>'
+          + 'VIN Insights'
+          + '<span style="font-size:9px;font-weight:400;color:#9CA3AF;margin-left:4px">from sample analysis</span>'
         + '</div>'
-        /* Row 1: year + models */
-        + '<div class="drill-insights-grid">'
-          + '<div>'
-            + '<div class="drill-insights-sub">Year Coverage</div>'
-            + yearHtml
-          + '</div>'
-          + '<div>'
-            + '<div class="drill-insights-sub">Model Coverage</div>'
-            + modelsHtml
-          + '</div>'
-        + '</div>'
-        /* Row 2: WMIs full-width */
-        + '<div class="vi-wmi-section">'
+        + '<div class="drill-insights-sub">Model Coverage</div>'
+        + modelsHtml
+        + '<div class="vi-section-gap">'
           + '<div class="drill-insights-sub">Coverage by WMI / Assembly Plant</div>'
           + wmisHtml
         + '</div>';
+
       inner.appendChild(section);
     });
   }
 
-  /* Re-run on every renderTable call */
   function hookRenderTable() {
     if (typeof renderTable === 'undefined') { setTimeout(hookRenderTable, 80); return; }
     var _orig = renderTable;
