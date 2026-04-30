@@ -61,6 +61,7 @@ export const WMI: Record<string, string> = {
   JM2: "Mazda truck",
   JM3: "Mazda SUV",
   JM4: "Mazda MPV/van (Japan)",
+  JT7: "Toyota (Japan)",
   JNA: "Nissan Diesel / UD Trucks",
   JNK: "Infiniti car",
   JNR: "Infiniti SUV",
@@ -103,6 +104,7 @@ export const WMI: Record<string, string> = {
   KL1: "GM Korea (Chevrolet car)",
   KL3: "GM Korea (Chevrolet/Holden)",
   KL4: "GM Korea (Buick)",
+  KL7: "GM Korea (Chevrolet)",
   KL8: "GM Korea (Chevrolet Spark)",
   KMC: "Hyundai commercial truck",
   KMF: "Hyundai (Asan, Korea)",
@@ -124,6 +126,7 @@ export const WMI: Record<string, string> = {
   KPT: "SsangYong/KGM SUV",
   // ── China ─────────────────────────────────────────────────────────────────
   LC0: "BYD Auto",
+  LRB: "Buick / GM (SAIC, China)",
   LBE: "Beijing Hyundai",
   LBV: "BMW Brilliance",
   LFM: "FAW Toyota",
@@ -242,11 +245,14 @@ export const WMI: Record<string, string> = {
   SLN: "Niftylift (UK)",
   SMT: "Triumph Motorcycles (UK)",
   SMB: "McLaren (UK)",
+  // ── Czech / Hungary / Austria ─────────────────────────────────────────────
+  TRU: "Audi (Győr, Hungary)",
   // ── Germany ──────────────────────────────────────────────────────────────
   WAC: "Audi / Porsche RS2",
   WAP: "Alpina",
   WAU: "Audi car",
   WA1: "Audi SUV",
+  W04: "Opel (Antwerp, Belgium)",
   WBA: "BMW car",
   WBS: "BMW M car",
   WBX: "BMW SUV",
@@ -325,6 +331,7 @@ export const WMI: Record<string, string> = {
   MBH: "Mitsubishi (India, by Hindustan Motors)",
   VX1: "Opel/Vauxhall (Poland)",
   // ── Italy ─────────────────────────────────────────────────────────────────
+  ZAA: "Alfa Romeo / Lancia (Italy)",
   ZAC: "Jeep / Dodge Hornet (Italy)",
   ZAM: "Maserati",
   ZAP: "Piaggio / Vespa / Gilera",
@@ -374,13 +381,16 @@ export const WMI: Record<string, string> = {
   // ── USA ──────────────────────────────────────────────────────────────────
   // Chrysler / Dodge / Jeep / Ram (Stellantis)
   "1B3": "Dodge car (USA)",
+  "1B4": "Dodge SUV/truck (USA)",
   "1B7": "Dodge truck (USA)",
   "1C3": "Chrysler/Dodge car (USA)",
   "1C4": "Jeep/Chrysler SUV (USA)",
   "1C6": "Ram truck (USA)",
   "1C8": "Chrysler minivan (USA)",
   "1D3": "Dodge truck (USA)",
+  "1D4": "Dodge truck (USA)",
   "1D7": "Dodge Ram truck (USA)",
+  "1D8": "Dodge/Chrysler SUV (USA)",
   // Ford / Lincoln
   "1FA": "Ford car (USA)",
   "1FB": "Ford bus/van (USA)",
@@ -389,15 +399,23 @@ export const WMI: Record<string, string> = {
   "1FU": "Freightliner truck (USA)",
   "1LN": "Lincoln car (USA)",
   "1ZV": "Ford/Lincoln (Flat Rock, USA)",
+  // Mitsubishi USA
+  "4A4": "Mitsubishi (Normal, Illinois, USA)",
+  // Mercedes-Benz USA
+  "4JG": "Mercedes-Benz (Tuscaloosa, Alabama, USA)",
   // GM
   "1G1": "Chevrolet car (USA)",
+  "1G2": "Pontiac car (USA)",
   "1G3": "Oldsmobile car (USA)",
+  "1G4": "Buick (USA)",
   "1G6": "Cadillac car (USA)",
+  "1G8": "Saturn car (USA)",
   "1GC": "Chevrolet truck (USA)",
   "1GK": "GMC SUV (USA)",
   "1GN": "Chevrolet SUV (USA)",
   "1GT": "GMC truck (USA)",
   "1GY": "Cadillac SUV (USA)",
+  "5GA": "Buick (Fairfax, USA)",
   // Others
   "1HD": "Harley-Davidson",
   "19X": "Honda (Indiana, USA)",
@@ -406,6 +424,7 @@ export const WMI: Record<string, string> = {
   "1N4": "Nissan car (USA)",
   "1N6": "Nissan truck (USA)",
   "1NX": "Toyota (NUMMI, USA)",
+  "1V2": "Volkswagen (Chattanooga, USA)",
   "1VW": "Volkswagen car (USA)",
   "1XK": "Kenworth truck (USA)",
   "1XP": "Peterbilt truck (USA)",
@@ -415,6 +434,7 @@ export const WMI: Record<string, string> = {
   "4S4": "Subaru SUV/MPV (USA)",
   "4T1": "Toyota (Kentucky, USA)",
   "4T3": "Toyota SUV (Kentucky, USA)",
+  "4T4": "Toyota (Georgetown, USA)",
   "4US": "BMW car (USA)",
   // 5xx USA
   "5FN": "Honda (Alabama, USA)",
@@ -430,6 +450,8 @@ export const WMI: Record<string, string> = {
   "5XX": "Kia car (Georgia, USA)",
   "5XY": "Kia/Hyundai SUV (Georgia, USA)",
   "5YF": "Toyota (Mississippi, USA)",
+  "5TB": "Toyota truck (USA)",
+  "5TE": "Toyota SUV (USA)",
   "5YJ": "Tesla Model S/3 (USA)",
   // 7xx USA/NZ
   "7FA": "Honda SUV (Indiana, USA)",
@@ -447,10 +469,20 @@ export const WMI: Record<string, string> = {
   "2C4": "Chrysler minivan (Windsor, Canada)",
   "2C8": "Chrysler minivan (Windsor, Canada)",
   "2D4": "Dodge/Chrysler (Canada)",
+  "2D8": "Dodge/Chrysler SUV (Canada)",
   // Ford/Lincoln Canada
   "2FM": "Ford/Lincoln SUV (Oakville, Canada)",
   "2LM": "Lincoln (Oakville, Canada)",
-  // Toyota/Honda/GM Canada
+  // GM Canada
+  "2CN": "Chevrolet/Pontiac (Oshawa, Canada)",
+  "2CT": "Chevrolet truck (Canada)",
+  "2G1": "Chevrolet car (Oshawa, Canada)",
+  "2G2": "Pontiac (Oshawa, Canada)",
+  "2G4": "Buick (Oshawa, Canada)",
+  "2GC": "Chevrolet truck (Oshawa, Canada)",
+  "2GK": "GMC SUV (Canada)",
+  "2GN": "Chevrolet SUV (CAMI, Canada)",
+  // Toyota/Honda Canada
   "2HG": "Honda (Canada)",
   "2HK": "Honda SUV (Canada)",
   "2T1": "Toyota (TMMC, Canada)",
@@ -469,10 +501,14 @@ export const WMI: Record<string, string> = {
   "3FM": "Ford SUV (Mexico)",
   "3FT": "Ford truck (Mexico)",
   "3LN": "Lincoln (Mexico)",
+  "3G0": "GM (Silao, Mexico)",
   "3G1": "Chevrolet (Mexico)",
   "3G2": "Pontiac / GM (Mexico)",
   "3GB": "Chevrolet (Ramos Arizpe, Mexico)",
   "3GC": "Chevrolet truck (Mexico)",
+  "3GK": "GMC SUV (Mexico)",
+  "3GN": "Chevrolet SUV (Mexico)",
+  "3GT": "GMC truck (Mexico)",
   "3HG": "Honda car (Mexico)",
   "3KP": "Kia (Pesquería, Mexico)",
   "3MZ": "Mazda (Mexico)",
@@ -480,10 +516,13 @@ export const WMI: Record<string, string> = {
   "3N1": "Nissan (Mexico)",
   "3TM": "Toyota (Baja California, Mexico)",
   "3TY": "Toyota (Guanajuato, Mexico)",
+  "3MW": "BMW (San Luis Potosí, Mexico)",
   "3VW": "Volkswagen (Mexico)",
   "3VV": "Volkswagen SUV (Mexico)",
   "3MY": "Toyota (by Mazda Mexico)",
   "3NI": "Nissan car (Mexico)",
+  "3D4": "Dodge/Chrysler (Toluca, Mexico)",
+  "3C6": "Ram truck (Mexico)",
   // ── Brazil ────────────────────────────────────────────────────────────────
   "9BD": "Fiat Brazil",
   "9BF": "Ford Brazil",
@@ -498,6 +537,7 @@ export const WMI: Record<string, string> = {
   // ── Australia ─────────────────────────────────────────────────────────────
   "6FP": "Ford Australia",
   "6G1": "Holden / GM Australia",
+  "6G3": "Holden / GM Australia",
   "6MM": "Mitsubishi Australia",
   "6T1": "Toyota Australia",
   // ── New Zealand ───────────────────────────────────────────────────────────
@@ -508,6 +548,7 @@ export const WMI: Record<string, string> = {
   "7A7": "Nissan New Zealand",
   "7JD": "Volvo Cars SUV",
   "7JR": "Volvo Cars",
+  "7A8": "Subaru New Zealand",
   "7MM": "Mazda (New Zealand)",
 };
 
