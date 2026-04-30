@@ -871,7 +871,7 @@ function vinInsightsHtml(): string {
   /* ── Model table ── */
   function modelTable(mc) {
     if (!mc || mc.length === 0) return '<span style="font-size:10px;color:#9CA3AF;font-style:italic">No data</span>';
-    var rows = mc.slice(0, 12).map(function (m) {
+    var rows = mc.map(function (m) {
       return '<tr>'
         + '<td title="' + m.model + '">' + m.model + '</td>'
         + '<td class="r"><span class="vi-vins">' + m.total + '</span></td>'

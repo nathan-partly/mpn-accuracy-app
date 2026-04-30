@@ -145,33 +145,23 @@ export async function GET(): Promise<NextResponse> {
       });
     }
 
-    const modelSeen: Record<string, number> = {};
     for (const r of modelRows) {
-      modelSeen[r.brand] = (modelSeen[r.brand] ?? 0);
-      if (modelSeen[r.brand] < 20) {
-        ensureBrand(r.brand).model_coverage.push({
-          model: r.model,
-          covered: r.covered,
-          total: r.total,
-          pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
-        });
-        modelSeen[r.brand]++;
-      }
+      ensureBrand(r.brand).model_coverage.push({
+        model: r.model,
+        covered: r.covered,
+        total: r.total,
+        pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
+      });
     }
 
-    const wmiSeen: Record<string, number> = {};
     for (const r of wmiRows) {
-      wmiSeen[r.brand] = (wmiSeen[r.brand] ?? 0);
-      if (wmiSeen[r.brand] < 15) {
-        ensureBrand(r.brand).wmi_coverage.push({
-          wmi: r.wmi,
-          manufacturer: r.wmi === "JDM" ? "Japanese Domestic Market" : lookupWmi(r.wmi),
-          covered: r.covered,
-          total: r.total,
-          pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
-        });
-        wmiSeen[r.brand]++;
-      }
+      ensureBrand(r.brand).wmi_coverage.push({
+        wmi: r.wmi,
+        manufacturer: r.wmi === "JDM" ? "Japanese Domestic Market" : lookupWmi(r.wmi),
+        covered: r.covered,
+        total: r.total,
+        pct: typeof r.pct === "string" ? parseFloat(r.pct) : (r.pct ?? 0),
+      });
     }
 
     return NextResponse.json(brandMap, { headers: { "Cache-Control": "no-store" } });
