@@ -762,15 +762,25 @@ function vinInsightsHtml(): string {
   .vi-divider { margin-top: 14px; padding-top: 12px; border-top: 1px solid #F0F0F5; }
 
   /* Year sparkline */
-  .vi-year-wrap { display: flex; align-items: flex-end; gap: 3px; height: 32px; margin-bottom: 4px; }
-  .vi-year-bar  { flex: 1; border-radius: 2px 2px 0 0; min-width: 6px; cursor: default; transition: opacity .15s; }
+  .vi-year-wrap { display: flex; align-items: flex-end; gap: 3px; height: 32px; margin-bottom: 4px; overflow: visible; }
+  .vi-year-bar  {
+    flex: 1; border-radius: 2px 2px 0 0; min-width: 6px; cursor: default;
+    transition: opacity .1s; position: relative;
+  }
   .vi-year-bar:hover { opacity: .75; }
-  .vi-year-legend {
-    display: flex; gap: 10px; align-items: center; margin-top: 4px;
+  /* Instant CSS tooltip — no browser title delay */
+  .vi-year-bar::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 5px); left: 50%;
+    transform: translateX(-50%);
+    background: #1F2937; color: #fff;
+    font-size: 11px; font-family: Inter, sans-serif; font-weight: 500;
+    white-space: nowrap; padding: 4px 8px; border-radius: 5px;
+    pointer-events: none; opacity: 0; z-index: 99;
   }
-  .vi-year-leg-dot {
-    width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 3px;
-  }
+  .vi-year-bar:hover::after { opacity: 1; }
+  .vi-year-legend { display: flex; gap: 10px; align-items: center; margin-top: 4px; }
+  .vi-year-leg-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 3px; }
 
   /* Coverage tables */
   .vi-table {
@@ -840,8 +850,8 @@ function vinInsightsHtml(): string {
     yc.forEach(function (y) {
       var h     = Math.max(4, Math.round((y.total / maxTotal) * 32));
       var color = pctColor(y.pct);
-      var tip   = y.year + ': ' + y.pct.toFixed(0) + '% coverage (' + y.covered + '/' + y.total + ' VINs)';
-      bars += '<div class="vi-year-bar" style="height:' + h + 'px;background:' + color + '" title="' + tip + '"></div>';
+      var tip   = y.year + ': ' + y.pct.toFixed(0) + '% (' + y.covered + '/' + y.total + ' VINs)';
+      bars += '<div class="vi-year-bar" style="height:' + h + 'px;background:' + color + '" data-tip="' + tip + '"></div>';
       var yr     = parseInt(y.year, 10);
       var showLbl = (yr % 5 === 0);
       lbls += '<div style="flex:1;min-width:6px;font-size:8px;color:#9CA3AF;text-align:center;overflow:hidden">'
