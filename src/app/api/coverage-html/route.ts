@@ -835,19 +835,22 @@ function vinInsightsHtml(): string {
     yc.forEach(function (y) { if (y.total > maxTotal) maxTotal = y.total; });
     if (maxTotal === 0) return '';
 
-    var bars = yc.map(function (y) {
-      var h    = Math.max(4, Math.round((y.total / maxTotal) * 32));
+    var bars   = '';
+    var lbls   = '';
+    yc.forEach(function (y) {
+      var h     = Math.max(4, Math.round((y.total / maxTotal) * 32));
       var color = pctColor(y.pct);
       var tip   = y.year + ': ' + y.pct.toFixed(0) + '% coverage (' + y.covered + '/' + y.total + ' VINs)';
-      return '<div class="vi-year-bar" style="height:' + h + 'px;background:' + color + '" title="' + tip + '"></div>';
-    }).join('');
+      bars += '<div class="vi-year-bar" style="height:' + h + 'px;background:' + color + '" title="' + tip + '"></div>';
+      var yr     = parseInt(y.year, 10);
+      var showLbl = (yr % 5 === 0);
+      lbls += '<div style="flex:1;min-width:6px;font-size:8px;color:#9CA3AF;text-align:center;overflow:hidden">'
+        + (showLbl ? y.year : '') + '</div>';
+    });
 
-    var firstYear = yc[0].year;
-    var lastYear  = yc[yc.length - 1].year;
-
-    return '<div class="vi-sub">Year Coverage &nbsp;<span style="font-weight:400;color:#6B7280">'
-      + firstYear + ' – ' + lastYear + '</span></div>'
+    return '<div class="vi-sub">Year Coverage</div>'
       + '<div class="vi-year-wrap">' + bars + '</div>'
+      + '<div style="display:flex;gap:3px;margin-top:1px;margin-bottom:4px">' + lbls + '</div>'
       + '<div class="vi-year-legend">'
       + '<span style="font-size:9px;color:#9CA3AF"><span class="vi-year-leg-dot" style="background:#10B981"></span>≥80%</span>'
       + '<span style="font-size:9px;color:#9CA3AF"><span class="vi-year-leg-dot" style="background:#F59E0B"></span>40–79%</span>'
