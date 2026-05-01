@@ -83,7 +83,10 @@ export async function GET(req: Request): Promise<NextResponse> {
   // Query coverage_vin_data directly so we can apply `rule_id IS NULL` — this
   // excludes VINs whose "coverage" came from a block rule match rather than genuine
   // GCS lookup, matching the adjusted figures shown on the main VIN Coverage Dashboard.
-  const brandCoverage: Record<string, { today: number; totalVins: number }> = {};
+  // marketCount: how many of the four markets a brand actually has VINs in.
+  // Used as the divisor when averaging per-market incremental gains for the "all" view —
+  // e.g. Vauxhall (UK only) → ÷1; Holden (NZ+AU) → ÷2; Toyota (all four) → ÷4.
+  const brandCoverage: Record<string, { today: number; totalVins: number; marketCount: number }> = {};
   try {
     // Get latest VIN snapshot id
     const snapRows = await sql`
@@ -94,23 +97,32 @@ export async function GET(req: Request): Promise<NextResponse> {
       const snapId = (snapRows[0] as { id: number }).id;
 
       // For a specific market, filter by that region; for "all", aggregate across all regions.
-      // totalVins = total VINs regardless of rule_id (the full VIO universe for this brand/market)
-      // covered   = VINs where gcs_found = true AND no block rule applied
-      let brandRows: Array<{ brand: string; covered: string; total: string }>;
-
+      // totalVins    = total VINs regardless of rule_id (the full VIO universe for this brand/market)
+      // covered      = VINs where gcs_found = true AND no block rule applied
+      // market_count = number of distinct markets (NZ/UK/AU/US) the brand has VINs in
       if (market === "all") {
-        brandRows = (await sql`
+        const brandRows = (await sql`
           SELECT
-            UPPER(input_make)                                                   AS brand,
-            COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text AS covered,
-            COUNT(*)::text                                                      AS total
+            UPPER(input_make)                                                         AS brand,
+            COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text        AS covered,
+            COUNT(*)::text                                                             AS total,
+            COUNT(DISTINCT UPPER(input_region))
+              FILTER (WHERE UPPER(input_region) IN ('NZ','UK','AU','US'))::text        AS market_count
           FROM coverage_vin_data
           WHERE snapshot_id = ${snapId}
           GROUP BY UPPER(input_make)
-        `) as Array<{ brand: string; covered: string; total: string }>;
+        `) as Array<{ brand: string; covered: string; total: string; market_count: string }>;
+
+        for (const row of brandRows) {
+          const total       = parseInt(row.total,        10) || 0;
+          const covered     = parseInt(row.covered,      10) || 0;
+          const marketCount = parseInt(row.market_count, 10) || 1;
+          const pct         = total > 0 ? (covered / total) * 100 : 0;
+          brandCoverage[row.brand] = { today: pct, totalVins: total, marketCount };
+        }
       } else {
         const regionFilter = regionKey(market); // "NZ" | "UK" | "AU" | "US"
-        brandRows = (await sql`
+        const brandRows = (await sql`
           SELECT
             UPPER(input_make)                                                   AS brand,
             COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text AS covered,
@@ -120,13 +132,13 @@ export async function GET(req: Request): Promise<NextResponse> {
             AND UPPER(input_region) = UPPER(${regionFilter})
           GROUP BY UPPER(input_make)
         `) as Array<{ brand: string; covered: string; total: string }>;
-      }
 
-      for (const row of brandRows) {
-        const total   = parseInt(row.total,   10) || 0;
-        const covered = parseInt(row.covered, 10) || 0;
-        const pct     = total > 0 ? (covered / total) * 100 : 0;
-        brandCoverage[row.brand] = { today: pct, totalVins: total };
+        for (const row of brandRows) {
+          const total   = parseInt(row.total,   10) || 0;
+          const covered = parseInt(row.covered, 10) || 0;
+          const pct     = total > 0 ? (covered / total) * 100 : 0;
+          brandCoverage[row.brand] = { today: pct, totalVins: total, marketCount: 1 };
+        }
       }
     }
   } catch {
@@ -251,15 +263,18 @@ export async function GET(req: Request): Promise<NextResponse> {
             const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
             perBrand = mVal != null ? mVal : totalIncremental / brandCount;
           } else {
-            // "All" market: global VIO is the average across all four markets
-            // (NZ + UK + AU + US) / 4, with missing markets treated as 0.
-            // Dividing by vals.length would overstate the gain when only some
-            // markets have data — always use 4 as the denominator.
+            // "All" market: global VIO averages across only the markets the brand
+            // exists in (derived from the VIN sample data). e.g.:
+            //   Vauxhall (UK only)  → divisor = 1
+            //   Holden (NZ + AU)    → divisor = 2
+            //   Toyota (all four)   → divisor = 4
+            // Markets with no per-brand gain entered contribute 0, not nothing.
             const hasAny = (["nz", "uk", "au", "us"] as const).some((m) => brandData[m] != null);
             if (hasAny) {
               const sum = (["nz", "uk", "au", "us"] as const)
                 .reduce((s, m) => s + (brandData[m] ?? 0), 0);
-              perBrand = sum / 4;
+              const divisor = (brandCoverage[key] ?? brandCoverage[brand])?.marketCount ?? 4;
+              perBrand = sum / Math.max(1, divisor);
             } else {
               perBrand = totalIncremental / brandCount;
             }
