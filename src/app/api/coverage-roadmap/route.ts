@@ -237,7 +237,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   const brandQuarterIntegrations: Record<string, Record<string, string[]>> = {};
 
   for (const integ of integrations) {
-    if (!integ.integration_date || integ.integration_date <= todayISO) continue;
+    if (!integ.integration_date || integ.integration_date < todayISO) continue;
     const q = quarterLabel(integ.integration_date);
     const totalIncremental = marketIncremental(integ, market);
     const brandCount = (integ.brands ?? []).length || 1;

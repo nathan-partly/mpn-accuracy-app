@@ -78,8 +78,8 @@ function trendChartHtml(): string {
     });
 
     var today = todayISO();
-    var past   = sorted.filter(function(i) { return i.integration_date <= today; });
-    var future = sorted.filter(function(i) { return i.integration_date >  today; });
+    var past   = sorted.filter(function(i) { return i.integration_date <  today; });
+    var future = sorted.filter(function(i) { return i.integration_date >= today; });
 
     /* build cumulative series */
     var covCum  = 0;
@@ -471,7 +471,7 @@ function integrationCountsHtml(): string {
       var countMap  = {};
       var detailMap = {};
       data.forEach(function (integ) {
-        if (!integ.integration_date || integ.integration_date > today) return;
+        if (!integ.integration_date || integ.integration_date >= today) return;
         (integ.brands || []).forEach(function (brand) {
           var key = norm(brand);
           if (!key) return;

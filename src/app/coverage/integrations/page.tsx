@@ -54,7 +54,7 @@ function fmtDate(iso: string) {
 }
 
 function isFuture(iso: string) {
-  return iso > todayISO();
+  return iso >= todayISO();
 }
 
 // ── Sortable column header ────────────────────────────────────────────────────
