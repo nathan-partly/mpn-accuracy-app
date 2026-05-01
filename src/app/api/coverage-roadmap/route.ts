@@ -331,6 +331,19 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
   }
 
+  // Cap stacked totals to 100% — today + cumulative gains cannot exceed 100.
+  // Quarters are already sorted chronologically, so we consume headroom in order.
+  // e.g. today=35%, Q2 gain=80% → Q2 capped at 65% (no headroom left for Q3+).
+  for (const row of topRows) {
+    let headroom = Math.max(0, 100 - (row.today as number));
+    for (const q of quarters) {
+      const gain = row[q] as number;
+      const capped = Math.min(gain, headroom);
+      row[q] = parseFloat(capped.toFixed(2));
+      headroom = Math.max(0, headroom - capped);
+    }
+  }
+
   if (debugMode) {
     // Also fetch raw DB values so we can compare pre/post parse
     let rawDbRows: unknown[] = [];

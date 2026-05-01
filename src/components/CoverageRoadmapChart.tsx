@@ -210,7 +210,7 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
 
           {market !== "all" && quarters.length > 0 && (
             <p className="text-xs text-grey-300 text-center mt-2">
-              Segment height = integration&apos;s {market.toUpperCase()} incremental VIO % ÷ number of brands in that integration
+              Segment height = expected {market.toUpperCase()} coverage gain for that brand · capped at 100% total
             </p>
           )}
           {quarters.length === 0 && (
