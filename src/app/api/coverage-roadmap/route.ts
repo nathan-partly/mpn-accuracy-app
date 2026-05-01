@@ -251,15 +251,18 @@ export async function GET(req: Request): Promise<NextResponse> {
             const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
             perBrand = mVal != null ? mVal : totalIncremental / brandCount;
           } else {
-            // "All" market: average the non-null per-market values so that e.g. a brand
-            // that gains 65% in NZ and 70% in UK shows ~67.5% gain in the combined view,
-            // rather than the meaningless totalIncremental / brandCount fallback.
-            const vals = (["nz", "uk", "au", "us"] as const)
-              .map((m) => brandData[m])
-              .filter((v): v is number => v != null);
-            perBrand = vals.length > 0
-              ? vals.reduce((s, v) => s + v, 0) / vals.length
-              : totalIncremental / brandCount;
+            // "All" market: global VIO is the average across all four markets
+            // (NZ + UK + AU + US) / 4, with missing markets treated as 0.
+            // Dividing by vals.length would overstate the gain when only some
+            // markets have data — always use 4 as the denominator.
+            const hasAny = (["nz", "uk", "au", "us"] as const).some((m) => brandData[m] != null);
+            if (hasAny) {
+              const sum = (["nz", "uk", "au", "us"] as const)
+                .reduce((s, m) => s + (brandData[m] ?? 0), 0);
+              perBrand = sum / 4;
+            } else {
+              perBrand = totalIncremental / brandCount;
+            }
           }
         } else {
           perBrand = totalIncremental / brandCount;
