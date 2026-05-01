@@ -233,13 +233,34 @@ export async function GET(req: Request): Promise<NextResponse> {
     for (const brand of (integ.brands ?? [])) {
       const key = brand.toUpperCase();
 
-      // Try per-brand override first (only for specific markets, not "all")
+      // Resolve per-brand coverage gain (as % of that brand's own VIN universe).
+      //
+      // Priority order:
+      //   1. brand_incremental[brand][market]  — explicit per-brand per-market value
+      //   2. For market="all": average of all non-null market values in brand_incremental[brand]
+      //      (e.g. FIAT: NZ=65, UK=70 → avg 67.5% of Fiat VINs gained)
+      //   3. totalIncremental / brandCount     — last-resort fallback using global VIO %
+      //      (NOTE: this is a different unit — % of global VIO — so it will understate
+      //       the brand-level gain for small brands. Always prefer per-brand values.)
       let perBrand: number;
-      if (market !== "all" && integ.brand_incremental) {
+      if (integ.brand_incremental) {
         const brandData = integ.brand_incremental[key] ?? integ.brand_incremental[brand];
         if (brandData) {
-          const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
-          perBrand = mVal != null ? mVal : totalIncremental / brandCount;
+          if (market !== "all") {
+            // Specific market: use that market's value, fall back to global estimate
+            const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
+            perBrand = mVal != null ? mVal : totalIncremental / brandCount;
+          } else {
+            // "All" market: average the non-null per-market values so that e.g. a brand
+            // that gains 65% in NZ and 70% in UK shows ~67.5% gain in the combined view,
+            // rather than the meaningless totalIncremental / brandCount fallback.
+            const vals = (["nz", "uk", "au", "us"] as const)
+              .map((m) => brandData[m])
+              .filter((v): v is number => v != null);
+            perBrand = vals.length > 0
+              ? vals.reduce((s, v) => s + v, 0) / vals.length
+              : totalIncremental / brandCount;
+          }
         } else {
           perBrand = totalIncremental / brandCount;
         }

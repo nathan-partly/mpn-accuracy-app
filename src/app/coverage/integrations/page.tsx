@@ -373,6 +373,30 @@ export default function DataIntegrationsPage() {
                 <input type="number" min={0} max={100} step={0.1} value={form.incremental_vio_pct ?? ""} onChange={(e) => setForm((f) => ({ ...f, incremental_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))} placeholder="e.g. 8.3" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
                 <p className="text-xs text-grey-400 mt-1">New VIO % added on top of existing coverage</p>
               </div>
+              {/* Market-specific incremental fields */}
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
+                  Incremental by Market %{" "}
+                  <span className="normal-case font-normal text-grey-400">— optional market-level overrides</span>
+                </label>
+                <div className="grid grid-cols-4 gap-3">
+                  {(["nz", "uk", "au", "us"] as const).map((m) => (
+                    <div key={m}>
+                      <label className="block text-xs font-semibold text-grey-400 uppercase tracking-wider mb-1">{m}</label>
+                      <input
+                        type="number" min={0} max={100} step={0.1}
+                        value={form[`incremental_${m}_pct` as keyof typeof form] as number ?? ""}
+                        onChange={(e) => setForm((f) => ({ ...f, [`incremental_${m}_pct`]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
+                        placeholder="e.g. 5.0"
+                        className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue tabular-nums"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-grey-400 mt-1">
+                  Leave blank to fall back to the global incremental ÷ market count for roadmap projections.
+                </p>
+              </div>
               {/* Per-brand incremental coverage by market */}
               {(() => {
                 const parsedBrands = brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
@@ -382,7 +406,7 @@ export default function DataIntegrationsPage() {
                     <p className="text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
                       Per-brand Incremental Coverage %{" "}
                       <span className="normal-case font-normal text-grey-400">
-                        — enter the expected VIN coverage gain per brand per market
+                        — % of <em>that brand&apos;s own VINs</em> newly covered (not % of global VIO)
                       </span>
                     </p>
                     <div className="border border-grey-200 rounded-lg overflow-hidden">
@@ -427,7 +451,8 @@ export default function DataIntegrationsPage() {
                       </div>
                     </div>
                     <p className="text-xs text-grey-400 mt-1">
-                      Leave blank for brands with no expected market-specific gain. Empty fields fall back to Incremental Global VIO % ÷ brand count.
+                      e.g. FIAT NZ=65 means &ldquo;this integration will cover 65% of NZ Fiat VINs that aren&apos;t covered today.&rdquo;
+                      These values drive the roadmap chart bars. Leave blank to fall back to global VIO % ÷ brand count (less accurate).
                     </p>
                   </div>
                 );
@@ -533,7 +558,7 @@ export default function DataIntegrationsPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Relationship</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Brands</th>
                     <SortTh label="Total VIO %" col="total_vio_pct" sort={sort} onSort={handleSort} right />
-                    <SortTh label="Incremental VIO %" col="incremental_vio_pct" sort={sort} onSort={handleSort} right />
+                    <SortTh label="Incremental Impact" col="incremental_vio_pct" sort={sort} onSort={handleSort} right />
                     <SortTh label="Integration Date" col="integration_date" sort={sort} onSort={handleSort} />
                     <th className="px-4 py-3" />
                   </tr>
@@ -559,10 +584,38 @@ export default function DataIntegrationsPage() {
                       <td className="px-4 py-3 text-right font-mono text-grey-700">
                         {row.total_vio_pct != null ? `${row.total_vio_pct.toFixed(1)}%` : <span className="text-grey-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold">
-                        {row.incremental_vio_pct != null
-                          ? <span className="text-brand-blue">+{row.incremental_vio_pct.toFixed(1)}%</span>
-                          : <span className="text-grey-300">—</span>}
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex flex-col items-end gap-1">
+                          {/* Global incremental */}
+                          <span className={`font-mono font-semibold ${row.incremental_vio_pct != null ? "text-brand-blue" : "text-grey-300"}`}>
+                            {row.incremental_vio_pct != null ? `+${row.incremental_vio_pct.toFixed(1)}%` : "—"}
+                          </span>
+                          {/* Market-specific breakdown — only show markets with a value */}
+                          {(() => {
+                            const markets = (
+                              [
+                                { key: "nz" as const, label: "NZ", val: row.incremental_nz_pct },
+                                { key: "uk" as const, label: "UK", val: row.incremental_uk_pct },
+                                { key: "au" as const, label: "AU", val: row.incremental_au_pct },
+                                { key: "us" as const, label: "US", val: row.incremental_us_pct },
+                              ] as const
+                            ).filter((m) => m.val != null);
+                            if (markets.length === 0) return null;
+                            return (
+                              <div className="flex flex-wrap gap-1 justify-end">
+                                {markets.map((m) => (
+                                  <span
+                                    key={m.key}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-600 tabular-nums"
+                                  >
+                                    <span className="text-blue-400 font-bold">{m.label}</span>
+                                    <span>+{m.val!.toFixed(1)}%</span>
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
