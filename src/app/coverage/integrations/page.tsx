@@ -619,11 +619,19 @@ export default function DataIntegrationsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="text-sm" style={{ minWidth: "1100px" }}>
                 <thead>
                   <tr className="border-b border-grey-100 bg-grey-50">
-                    <th className="pl-4 pr-2 py-3 text-xs font-semibold text-grey-300 uppercase tracking-wider text-right w-8">#</th>
-                    <SortTh label="Integration" col="name" sort={sort} onSort={handleSort} />
+                    <th className="sticky left-0 z-20 bg-grey-50 pl-4 pr-2 py-3 text-xs font-semibold text-grey-300 uppercase tracking-wider text-right w-9">#</th>
+                    <th
+                      className="sticky left-9 z-20 bg-grey-50 text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider cursor-pointer select-none hover:text-grey-800 transition-colors whitespace-nowrap shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]"
+                      onClick={() => handleSort("name")}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Integration
+                        {sort.key === "name" ? <Arrow dir={sort.dir} /> : <span className="text-grey-300">↕</span>}
+                      </span>
+                    </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Type</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Relationship</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Brands</th>
@@ -636,10 +644,12 @@ export default function DataIntegrationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row, idx) => (
-                    <tr key={row.id} className={`border-b border-grey-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-grey-50/40"} hover:bg-blue-50/30 transition-colors`}>
-                      <td className="pl-4 pr-2 py-3 text-xs font-mono text-grey-300 text-right tabular-nums">{idx + 1}</td>
-                      <td className="px-4 py-3 font-medium text-grey-950 whitespace-nowrap">{row.name}</td>
+                  {filtered.map((row, idx) => {
+                    const stickyBg = idx % 2 === 0 ? "bg-white" : "bg-grey-50/40";
+                    return (
+                    <tr key={row.id} className={`group border-b border-grey-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-grey-50/40"} hover:bg-blue-50/30 transition-colors`}>
+                      <td className={`sticky left-0 z-10 pl-4 pr-2 py-3 text-xs font-mono text-grey-300 text-right tabular-nums transition-colors group-hover:bg-blue-50/30 ${stickyBg}`}>{idx + 1}</td>
+                      <td className={`sticky left-9 z-10 px-4 py-3 font-medium text-grey-950 whitespace-nowrap transition-colors group-hover:bg-blue-50/30 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] ${stickyBg}`}>{row.name}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${row.type === "online" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                           {row.type === "online" ? "Online" : "Offline"}
@@ -727,7 +737,8 @@ export default function DataIntegrationsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                  );
+                })}
                 </tbody>
               </table>
             </div>
