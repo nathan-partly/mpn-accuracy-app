@@ -16,9 +16,9 @@ const AVAILABILITY_OPTIONS: { value: DataAvailability; label: string; color: str
 
 function AvailabilityBadge({ value }: { value: DataAvailability }) {
   const opt = AVAILABILITY_OPTIONS.find((o) => o.value === value) ?? AVAILABILITY_OPTIONS[0];
-  if (!value) return <span className="text-grey-300 text-xs">—</span>;
+  if (!value) return <span className="text-grey-300">—</span>;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${opt.bg} ${opt.color}`}>
+    <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold ${opt.bg} ${opt.color}`}>
       {opt.label}
     </span>
   );
@@ -98,7 +98,7 @@ function SortTh({
   const active = sort.key === col;
   return (
     <th
-      className={`px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider cursor-pointer select-none hover:text-grey-800 transition-colors ${right ? "text-right" : "text-left"}`}
+      className={`px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider cursor-pointer select-none hover:text-grey-800 transition-colors ${right ? "text-right" : "text-left"}`}
       onClick={() => onSort(col)}
     >
       <span className="inline-flex items-center gap-1">
@@ -619,12 +619,12 @@ export default function DataIntegrationsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="text-sm" style={{ minWidth: "1100px" }}>
+              <table className="text-xs" style={{ minWidth: "980px" }}>
                 <thead>
                   <tr className="border-b border-grey-100 bg-grey-50">
-                    <th className="sticky left-0 z-20 bg-grey-50 pl-4 pr-2 py-3 text-xs font-semibold text-grey-300 uppercase tracking-wider text-right w-9">#</th>
+                    <th className="sticky left-0 z-20 bg-grey-50 pl-3 pr-1.5 py-2 text-[10px] font-semibold text-grey-300 uppercase tracking-wider text-right w-8">#</th>
                     <th
-                      className="sticky left-9 z-20 bg-grey-50 text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider cursor-pointer select-none hover:text-grey-800 transition-colors whitespace-nowrap shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]"
+                      className="sticky left-8 z-20 bg-grey-50 text-left px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider cursor-pointer select-none hover:text-grey-800 transition-colors whitespace-nowrap shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]"
                       onClick={() => handleSort("name")}
                     >
                       <span className="inline-flex items-center gap-1">
@@ -632,15 +632,15 @@ export default function DataIntegrationsPage() {
                         {sort.key === "name" ? <Arrow dir={sort.dir} /> : <span className="text-grey-300">↕</span>}
                       </span>
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Type</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Relationship</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Brands</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider text-left">Availability</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider">Type</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider">Rel.</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider">Brands</th>
+                    <th className="px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider text-left">Availability</th>
                     <SortTh label="Total VIO %" col="total_vio_pct" sort={sort} onSort={handleSort} right />
-                    <SortTh label="Incremental Impact" col="incremental_vio_pct" sort={sort} onSort={handleSort} right />
-                    <th className="px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider text-right">Cost</th>
-                    <SortTh label="Integration Date" col="integration_date" sort={sort} onSort={handleSort} />
-                    <th className="px-4 py-3" />
+                    <SortTh label="Incremental" col="incremental_vio_pct" sort={sort} onSort={handleSort} right />
+                    <th className="px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider text-right">Cost</th>
+                    <SortTh label="Date" col="integration_date" sort={sort} onSort={handleSort} />
+                    <th className="px-2 py-2" />
                   </tr>
                 </thead>
                 <tbody>
@@ -648,34 +648,32 @@ export default function DataIntegrationsPage() {
                     const stickyBg = idx % 2 === 0 ? "bg-white" : "bg-grey-50/40";
                     return (
                     <tr key={row.id} className={`group border-b border-grey-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-grey-50/40"} hover:bg-blue-50/30 transition-colors`}>
-                      <td className={`sticky left-0 z-10 pl-4 pr-2 py-3 text-xs font-mono text-grey-300 text-right tabular-nums transition-colors group-hover:bg-blue-50/30 ${stickyBg}`}>{idx + 1}</td>
-                      <td className={`sticky left-9 z-10 px-4 py-3 font-medium text-grey-950 whitespace-nowrap transition-colors group-hover:bg-blue-50/30 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] ${stickyBg}`}>{row.name}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${row.type === "online" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                      <td className={`sticky left-0 z-10 pl-3 pr-1.5 py-1.5 font-mono text-grey-300 text-right tabular-nums transition-colors group-hover:bg-blue-50/30 ${stickyBg}`}>{idx + 1}</td>
+                      <td className={`sticky left-8 z-10 px-3 py-1.5 font-medium text-grey-950 whitespace-nowrap transition-colors group-hover:bg-blue-50/30 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] ${stickyBg}`}>{row.name}</td>
+                      <td className="px-3 py-1.5">
+                        <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold ${row.type === "online" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                           {row.type === "online" ? "Online" : "Offline"}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${row.relationship === "direct" ? "bg-purple-100 text-purple-700" : "bg-grey-100 text-grey-600"}`}>
-                          {row.relationship === "direct" ? "Direct" : "Third-party"}
+                      <td className="px-3 py-1.5">
+                        <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold ${row.relationship === "direct" ? "bg-purple-100 text-purple-700" : "bg-grey-100 text-grey-600"}`}>
+                          {row.relationship === "direct" ? "Direct" : "3rd party"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-grey-600 max-w-xs">
+                      <td className="px-3 py-1.5 text-grey-600 max-w-[200px]">
                         <BrandList brands={row.brands} />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-1.5">
                         <AvailabilityBadge value={row.data_availability} />
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-grey-700">
+                      <td className="px-3 py-1.5 text-right font-mono text-grey-700">
                         {row.total_vio_pct != null ? `${row.total_vio_pct.toFixed(1)}%` : <span className="text-grey-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          {/* Global incremental */}
+                      <td className="px-3 py-1.5 text-right">
+                        <div className="flex flex-col items-end gap-0.5">
                           <span className={`font-mono font-semibold ${row.incremental_vio_pct != null ? "text-brand-blue" : "text-grey-300"}`}>
                             {row.incremental_vio_pct != null ? `+${row.incremental_vio_pct.toFixed(1)}%` : "—"}
                           </span>
-                          {/* Market-specific breakdown — only show markets with a value */}
                           {(() => {
                             const markets = (
                               [
@@ -687,13 +685,13 @@ export default function DataIntegrationsPage() {
                             ).filter((m) => m.val != null);
                             if (markets.length === 0) return null;
                             return (
-                              <div className="flex flex-wrap gap-1 justify-end">
+                              <div className="flex flex-wrap gap-0.5 justify-end">
                                 {markets.map((m) => (
                                   <span
                                     key={m.key}
-                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-600 tabular-nums"
+                                    className="inline-flex items-center gap-px px-1 py-px rounded text-[9px] font-semibold bg-blue-50 text-blue-600 tabular-nums"
                                   >
-                                    <span className="text-blue-400 font-bold">{m.label}</span>
+                                    <span className="text-blue-400">{m.label}</span>
                                     <span>+{m.val!.toFixed(1)}%</span>
                                   </span>
                                 ))}
@@ -702,37 +700,37 @@ export default function DataIntegrationsPage() {
                           })()}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-1.5 text-right">
                         {(row.annual_cost != null || row.cost_per_vin != null) ? (
-                          <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex flex-col items-end gap-px">
                             {row.annual_cost != null && (
-                              <span className="font-mono text-xs font-semibold text-grey-700">{fmtCost(row.annual_cost)}<span className="font-normal text-grey-400">/yr</span></span>
+                              <span className="font-mono font-semibold text-grey-700">{fmtCost(row.annual_cost)}<span className="font-normal text-grey-400">/yr</span></span>
                             )}
                             {row.cost_per_vin != null && (
-                              <span className="font-mono text-xs text-grey-400">{fmtCost(row.cost_per_vin)}<span>/VIN</span></span>
+                              <span className="font-mono text-grey-400">{fmtCost(row.cost_per_vin)}<span>/VIN</span></span>
                             )}
                           </div>
-                        ) : <span className="text-grey-300 text-xs">—</span>}
+                        ) : <span className="text-grey-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
                           <span className="text-grey-700">{fmtDate(row.integration_date)}</span>
                           {isFuture(row.integration_date) && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">TARGET</span>
+                            <span className="inline-flex items-center px-1 py-px rounded text-[9px] font-semibold bg-amber-100 text-amber-700">TARGET</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-2 py-1.5">
                         {deleteConfirm === row.id ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-grey-500">Delete?</span>
-                            <button onClick={() => handleDelete(row.id)} className="text-xs font-semibold text-red-600 hover:text-red-700">Yes</button>
-                            <button onClick={() => setDeleteConfirm(null)} className="text-xs font-semibold text-grey-400 hover:text-grey-600">No</button>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-grey-500">Delete?</span>
+                            <button onClick={() => handleDelete(row.id)} className="font-semibold text-red-600 hover:text-red-700">Yes</button>
+                            <button onClick={() => setDeleteConfirm(null)} className="font-semibold text-grey-400 hover:text-grey-600">No</button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3 justify-end">
-                            <button onClick={() => openEdit(row)} className="text-xs font-semibold text-brand-blue hover:text-blue-700">Edit</button>
-                            <button onClick={() => setDeleteConfirm(row.id)} className="text-xs font-semibold text-grey-400 hover:text-red-500">Delete</button>
+                          <div className="flex items-center gap-2 justify-end">
+                            <button onClick={() => openEdit(row)} className="font-semibold text-brand-blue hover:text-blue-700">Edit</button>
+                            <button onClick={() => setDeleteConfirm(row.id)} className="font-semibold text-grey-400 hover:text-red-500">Del</button>
                           </div>
                         )}
                       </td>
