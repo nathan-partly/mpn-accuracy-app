@@ -5,6 +5,31 @@ import Link from "next/link";
 import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
 
 type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
+type DataAvailability = "available" | "high_confidence" | "low_confidence" | null;
+
+const AVAILABILITY_OPTIONS: { value: DataAvailability; label: string; color: string; bg: string }[] = [
+  { value: null,              label: "Unknown",                  color: "text-grey-400",   bg: "bg-grey-100" },
+  { value: "available",       label: "Available",                color: "text-green-700",  bg: "bg-green-100" },
+  { value: "high_confidence", label: "Can get · High confidence", color: "text-blue-700",   bg: "bg-blue-100" },
+  { value: "low_confidence",  label: "Can get · Low confidence",  color: "text-amber-700",  bg: "bg-amber-100" },
+];
+
+function AvailabilityBadge({ value }: { value: DataAvailability }) {
+  const opt = AVAILABILITY_OPTIONS.find((o) => o.value === value) ?? AVAILABILITY_OPTIONS[0];
+  if (!value) return <span className="text-grey-300 text-xs">—</span>;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${opt.bg} ${opt.color}`}>
+      {opt.label}
+    </span>
+  );
+}
+
+function fmtCost(v: number | null): string {
+  if (v == null) return "—";
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000)     return `$${(v / 1_000).toFixed(1)}k`;
+  return `$${v.toFixed(2)}`;
+}
 
 interface DataIntegration {
   id: number;
@@ -19,6 +44,9 @@ interface DataIntegration {
   incremental_au_pct: number | null;
   incremental_us_pct: number | null;
   brand_incremental: BrandIncrementalMap | null;
+  data_availability: DataAvailability;
+  annual_cost: number | null;
+  cost_per_vin: number | null;
   integration_date: string;
 }
 
@@ -38,6 +66,9 @@ const EMPTY_FORM: Omit<DataIntegration, "id"> = {
   incremental_au_pct: null,
   incremental_us_pct: null,
   brand_incremental: null,
+  data_availability: null,
+  annual_cost: null,
+  cost_per_vin: null,
   integration_date: "",
 };
 
@@ -209,6 +240,9 @@ export default function DataIntegrationsPage() {
       incremental_au_pct: row.incremental_au_pct ?? null,
       incremental_us_pct: row.incremental_us_pct ?? null,
       brand_incremental: row.brand_incremental ?? null,
+      data_availability: row.data_availability ?? null,
+      annual_cost: row.annual_cost ?? null,
+      cost_per_vin: row.cost_per_vin ?? null,
       integration_date: row.integration_date,
     });
     // Populate per-brand form state from saved data
@@ -373,6 +407,42 @@ export default function DataIntegrationsPage() {
                 <input type="number" min={0} max={100} step={0.1} value={form.incremental_vio_pct ?? ""} onChange={(e) => setForm((f) => ({ ...f, incremental_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))} placeholder="e.g. 8.3" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
                 <p className="text-xs text-grey-400 mt-1">New VIO % added on top of existing coverage</p>
               </div>
+              {/* Data availability + cost */}
+              <div className="col-span-2 grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Data Availability</label>
+                  <select
+                    value={form.data_availability ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, data_availability: (e.target.value || null) as DataAvailability }))}
+                    className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue bg-white"
+                  >
+                    {AVAILABILITY_OPTIONS.map((o) => (
+                      <option key={String(o.value)} value={o.value ?? ""}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Annual Cost (USD)</label>
+                  <input
+                    type="number" min={0} step={100}
+                    value={form.annual_cost ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, annual_cost: e.target.value === "" ? null : parseFloat(e.target.value) }))}
+                    placeholder="e.g. 25000"
+                    className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Cost per VIN (USD)</label>
+                  <input
+                    type="number" min={0} step={0.001}
+                    value={form.cost_per_vin ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, cost_per_vin: e.target.value === "" ? null : parseFloat(e.target.value) }))}
+                    placeholder="e.g. 0.05"
+                    className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue tabular-nums"
+                  />
+                </div>
+              </div>
+
               {/* Market-specific incremental fields */}
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
@@ -557,8 +627,10 @@ export default function DataIntegrationsPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Type</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Relationship</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider">Brands</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider text-left">Availability</th>
                     <SortTh label="Total VIO %" col="total_vio_pct" sort={sort} onSort={handleSort} right />
                     <SortTh label="Incremental Impact" col="incremental_vio_pct" sort={sort} onSort={handleSort} right />
+                    <th className="px-4 py-3 text-xs font-semibold text-grey-500 uppercase tracking-wider text-right">Cost</th>
                     <SortTh label="Integration Date" col="integration_date" sort={sort} onSort={handleSort} />
                     <th className="px-4 py-3" />
                   </tr>
@@ -580,6 +652,9 @@ export default function DataIntegrationsPage() {
                       </td>
                       <td className="px-4 py-3 text-grey-600 max-w-xs">
                         <BrandList brands={row.brands} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <AvailabilityBadge value={row.data_availability} />
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-grey-700">
                         {row.total_vio_pct != null ? `${row.total_vio_pct.toFixed(1)}%` : <span className="text-grey-300">—</span>}
@@ -616,6 +691,18 @@ export default function DataIntegrationsPage() {
                             );
                           })()}
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {(row.annual_cost != null || row.cost_per_vin != null) ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            {row.annual_cost != null && (
+                              <span className="font-mono text-xs font-semibold text-grey-700">{fmtCost(row.annual_cost)}<span className="font-normal text-grey-400">/yr</span></span>
+                            )}
+                            {row.cost_per_vin != null && (
+                              <span className="font-mono text-xs text-grey-400">{fmtCost(row.cost_per_vin)}<span>/VIN</span></span>
+                            )}
+                          </div>
+                        ) : <span className="text-grey-300 text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
