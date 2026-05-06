@@ -619,7 +619,7 @@ export default function DataIntegrationsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="text-xs" style={{ minWidth: "980px" }}>
+              <table className="w-full text-xs" style={{ minWidth: "980px" }}>
                 <thead>
                   <tr className="border-b border-grey-100 bg-grey-50">
                     <th className="sticky left-0 z-20 bg-grey-50 pl-3 pr-1.5 py-2 text-[10px] font-semibold text-grey-300 uppercase tracking-wider text-right w-8">#</th>
