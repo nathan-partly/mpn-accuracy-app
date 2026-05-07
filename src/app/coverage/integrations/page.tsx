@@ -7,20 +7,20 @@ import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
 type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
 type DataAvailability = "integrated" | "available" | "high_confidence" | "low_confidence" | null;
 
-const AVAILABILITY_OPTIONS: { value: DataAvailability; label: string; color: string; bg: string }[] = [
-  { value: null,              label: "Unknown",                   color: "text-grey-400",   bg: "bg-grey-100" },
-  { value: "integrated",      label: "Integrated",                color: "text-teal-700",   bg: "bg-teal-100" },
-  { value: "available",       label: "Available",                 color: "text-green-700",  bg: "bg-green-100" },
-  { value: "high_confidence", label: "Can get · High confidence", color: "text-blue-700",   bg: "bg-blue-100" },
-  { value: "low_confidence",  label: "Can get · Low confidence",  color: "text-amber-700",  bg: "bg-amber-100" },
+const AVAILABILITY_OPTIONS: { value: DataAvailability; label: string; shortLabel: string; color: string; bg: string }[] = [
+  { value: null,              label: "Unknown",                   shortLabel: "Unknown",      color: "text-grey-400",   bg: "bg-grey-100" },
+  { value: "integrated",      label: "Integrated",                shortLabel: "Integrated",   color: "text-teal-700",   bg: "bg-teal-100" },
+  { value: "available",       label: "Available",                 shortLabel: "Available",    color: "text-green-700",  bg: "bg-green-100" },
+  { value: "high_confidence", label: "Can get · High confidence", shortLabel: "High conf.",   color: "text-blue-700",   bg: "bg-blue-100" },
+  { value: "low_confidence",  label: "Can get · Low confidence",  shortLabel: "Low conf.",    color: "text-amber-700",  bg: "bg-amber-100" },
 ];
 
 function AvailabilityBadge({ value }: { value: DataAvailability }) {
   const opt = AVAILABILITY_OPTIONS.find((o) => o.value === value) ?? AVAILABILITY_OPTIONS[0];
   if (!value) return <span className="text-grey-300">—</span>;
   return (
-    <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold ${opt.bg} ${opt.color}`}>
-      {opt.label}
+    <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold whitespace-nowrap ${opt.bg} ${opt.color}`} title={opt.label}>
+      {opt.shortLabel}
     </span>
   );
 }
@@ -676,35 +676,33 @@ export default function DataIntegrationsPage() {
                         {row.total_vio_pct != null ? `${row.total_vio_pct.toFixed(1)}%` : <span className="text-grey-300">—</span>}
                       </td>
                       <td className="px-3 py-1.5 text-right">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className={`font-mono font-semibold ${row.incremental_vio_pct != null ? "text-brand-blue" : "text-grey-300"}`}>
-                            {row.incremental_vio_pct != null ? `+${row.incremental_vio_pct.toFixed(1)}%` : "—"}
-                          </span>
-                          {(() => {
-                            const markets = (
-                              [
-                                { key: "nz" as const, label: "NZ", val: row.incremental_nz_pct },
-                                { key: "uk" as const, label: "UK", val: row.incremental_uk_pct },
-                                { key: "au" as const, label: "AU", val: row.incremental_au_pct },
-                                { key: "us" as const, label: "US", val: row.incremental_us_pct },
-                              ] as const
-                            ).filter((m) => m.val != null);
-                            if (markets.length === 0) return null;
-                            return (
-                              <div className="flex flex-wrap gap-0.5 justify-end">
-                                {markets.map((m) => (
-                                  <span
-                                    key={m.key}
-                                    className="inline-flex items-center gap-px px-1 py-px rounded text-[9px] font-semibold bg-blue-50 text-blue-600 tabular-nums"
-                                  >
-                                    <span className="text-blue-400">{m.label}</span>
-                                    <span>+{m.val!.toFixed(1)}%</span>
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                        <span className={`font-mono font-semibold ${row.incremental_vio_pct != null ? "text-brand-blue" : "text-grey-300"}`}>
+                          {row.incremental_vio_pct != null ? `+${row.incremental_vio_pct.toFixed(1)}%` : "—"}
+                        </span>
+                        {(() => {
+                          const markets = (
+                            [
+                              { key: "nz" as const, label: "NZ", val: row.incremental_nz_pct },
+                              { key: "uk" as const, label: "UK", val: row.incremental_uk_pct },
+                              { key: "au" as const, label: "AU", val: row.incremental_au_pct },
+                              { key: "us" as const, label: "US", val: row.incremental_us_pct },
+                            ] as const
+                          ).filter((m) => m.val != null);
+                          if (markets.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-0.5 justify-end mt-0.5">
+                              {markets.map((m) => (
+                                <span
+                                  key={m.key}
+                                  className="inline-flex items-center gap-px px-1 py-px rounded text-[9px] font-semibold bg-blue-50 text-blue-600 tabular-nums whitespace-nowrap"
+                                >
+                                  <span className="text-blue-400">{m.label}</span>
+                                  <span>+{m.val!.toFixed(1)}%</span>
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-1.5 text-right">
                         {(row.annual_cost != null || row.cost_per_vin != null) ? (
