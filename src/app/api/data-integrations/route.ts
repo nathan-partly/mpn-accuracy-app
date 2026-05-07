@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
 
-export type DataAvailability = "available" | "high_confidence" | "low_confidence" | null;
+export type DataAvailability = "integrated" | "available" | "high_confidence" | "low_confidence" | null;
 
 export interface DataIntegration {
   id: number;
@@ -23,7 +23,7 @@ export interface DataIntegration {
   data_availability: DataAvailability;
   annual_cost: number | null;
   cost_per_vin: number | null;
-  integration_date: string;
+  integration_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +49,12 @@ export async function GET() {
   } catch {
     // Migration failed (e.g. already applied) — continue anyway
   }
+  try {
+    // Allow integration_date to be NULL (undated future targets)
+    await sql`ALTER TABLE data_integrations ALTER COLUMN integration_date DROP NOT NULL`;
+  } catch {
+    // Already nullable — ignore
+  }
 
   try {
     const rows = await sql`
@@ -67,7 +73,7 @@ export async function GET() {
         integration_date::text        AS integration_date,
         created_at, updated_at
       FROM data_integrations
-      ORDER BY integration_date ASC, id ASC
+      ORDER BY integration_date ASC NULLS LAST, id ASC
     `;
     return NextResponse.json(rows, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
@@ -89,8 +95,8 @@ export async function POST(req: Request) {
       integration_date,
     } = body;
 
-    if (!name?.trim() || !type || !integration_date) {
-      return NextResponse.json({ error: "name, type, and integration_date are required" }, { status: 400 });
+    if (!name?.trim() || !type) {
+      return NextResponse.json({ error: "name and type are required" }, { status: 400 });
     }
     if (!["online", "offline"].includes(type)) {
       return NextResponse.json({ error: "type must be 'online' or 'offline'" }, { status: 400 });
@@ -100,8 +106,9 @@ export async function POST(req: Request) {
     const brandIncrementalVal = brand_incremental && typeof brand_incremental === "object" && Object.keys(brand_incremental).length > 0
       ? JSON.stringify(brand_incremental)
       : null;
+    const dateVal: string | null = integration_date?.trim() || null;
 
-    const availabilityVal = ["available", "high_confidence", "low_confidence"].includes(data_availability)
+    const availabilityVal = ["integrated", "available", "high_confidence", "low_confidence"].includes(data_availability)
       ? data_availability : null;
 
     const rows = await sql`
@@ -118,7 +125,7 @@ export async function POST(req: Request) {
          ${n(incremental_nz_pct)}, ${n(incremental_uk_pct)}, ${n(incremental_au_pct)}, ${n(incremental_us_pct)},
          ${brandIncrementalVal}::jsonb,
          ${availabilityVal}, ${n(annual_cost)}, ${n(cost_per_vin)},
-         ${integration_date})
+         ${dateVal})
       RETURNING
         id, name, type, relationship, brands,
         total_vio_pct::float          AS total_vio_pct,

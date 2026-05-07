@@ -5,11 +5,12 @@ import Link from "next/link";
 import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
 
 type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
-type DataAvailability = "available" | "high_confidence" | "low_confidence" | null;
+type DataAvailability = "integrated" | "available" | "high_confidence" | "low_confidence" | null;
 
 const AVAILABILITY_OPTIONS: { value: DataAvailability; label: string; color: string; bg: string }[] = [
-  { value: null,              label: "Unknown",                  color: "text-grey-400",   bg: "bg-grey-100" },
-  { value: "available",       label: "Available",                color: "text-green-700",  bg: "bg-green-100" },
+  { value: null,              label: "Unknown",                   color: "text-grey-400",   bg: "bg-grey-100" },
+  { value: "integrated",      label: "Integrated",                color: "text-teal-700",   bg: "bg-teal-100" },
+  { value: "available",       label: "Available",                 color: "text-green-700",  bg: "bg-green-100" },
   { value: "high_confidence", label: "Can get · High confidence", color: "text-blue-700",   bg: "bg-blue-100" },
   { value: "low_confidence",  label: "Can get · Low confidence",  color: "text-amber-700",  bg: "bg-amber-100" },
 ];
@@ -47,7 +48,7 @@ interface DataIntegration {
   data_availability: DataAvailability;
   annual_cost: number | null;
   cost_per_vin: number | null;
-  integration_date: string;
+  integration_date: string | null;
 }
 
 type SortKey = "name" | "integration_date" | "total_vio_pct" | "incremental_vio_pct";
@@ -69,7 +70,7 @@ const EMPTY_FORM: Omit<DataIntegration, "id"> = {
   data_availability: null,
   annual_cost: null,
   cost_per_vin: null,
-  integration_date: "",
+  integration_date: null,
 };
 
 // Per-brand incremental state: string values so inputs work cleanly
@@ -79,12 +80,14 @@ function todayISO() {
   return new Date().toISOString().split("T")[0];
 }
 
-function fmtDate(iso: string) {
+function fmtDate(iso: string | null) {
+  if (!iso) return null;
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function isFuture(iso: string) {
+function isFuture(iso: string | null) {
+  if (!iso) return true; // no date = undated future target
   return iso >= todayISO();
 }
 
@@ -207,7 +210,7 @@ export default function DataIntegrationsPage() {
       let av: string | number, bv: string | number;
       switch (sort.key) {
         case "name":             av = a.name; bv = b.name; break;
-        case "integration_date": av = a.integration_date; bv = b.integration_date; break;
+        case "integration_date": av = a.integration_date ?? "9999-99-99"; bv = b.integration_date ?? "9999-99-99"; break;
         case "total_vio_pct":    av = a.total_vio_pct ?? -1; bv = b.total_vio_pct ?? -1; break;
         case "incremental_vio_pct": av = a.incremental_vio_pct ?? -1; bv = b.incremental_vio_pct ?? -1; break;
       }
@@ -243,7 +246,7 @@ export default function DataIntegrationsPage() {
       data_availability: row.data_availability ?? null,
       annual_cost: row.annual_cost ?? null,
       cost_per_vin: row.cost_per_vin ?? null,
-      integration_date: row.integration_date,
+      integration_date: row.integration_date ?? null,
     });
     // Populate per-brand form state from saved data
     const bi: BrandIncrementalForm = {};
@@ -264,7 +267,7 @@ export default function DataIntegrationsPage() {
   }
 
   async function handleSave() {
-    if (!form.name.trim() || !form.integration_date) { setFormError("Integration name and date are required."); return; }
+    if (!form.name.trim()) { setFormError("Integration name is required."); return; }
     setSaving(true); setFormError(null);
     const brandsArr = brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
     // Convert per-brand string values to numbers for the payload
@@ -387,8 +390,11 @@ export default function DataIntegrationsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Integration Date *</label>
-                <input type="date" value={form.integration_date} onChange={(e) => setForm((f) => ({ ...f, integration_date: e.target.value }))} className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
+                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Integration Date <span className="normal-case font-normal text-grey-400">— optional</span></label>
+                <input type="date" value={form.integration_date ?? ""} onChange={(e) => setForm((f) => ({ ...f, integration_date: e.target.value || null }))} className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
+                {!form.integration_date && (
+                  <p className="text-xs text-grey-400 mt-1">No date — will appear as an undated future target</p>
+                )}
                 {form.integration_date && isFuture(form.integration_date) && (
                   <p className="text-xs text-amber-600 mt-1">Future date — will show as a projected target</p>
                 )}
@@ -714,8 +720,14 @@ export default function DataIntegrationsPage() {
                       </td>
                       <td className="px-3 py-1.5 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-grey-700">{fmtDate(row.integration_date)}</span>
-                          {isFuture(row.integration_date) && (
+                          {row.integration_date
+                            ? <span className="text-grey-700">{fmtDate(row.integration_date)}</span>
+                            : <span className="text-grey-300">—</span>
+                          }
+                          {!row.integration_date && (
+                            <span className="inline-flex items-center px-1 py-px rounded text-[9px] font-semibold bg-grey-100 text-grey-500">TBD</span>
+                          )}
+                          {row.integration_date && isFuture(row.integration_date) && (
                             <span className="inline-flex items-center px-1 py-px rounded text-[9px] font-semibold bg-amber-100 text-amber-700">TARGET</span>
                           )}
                         </div>

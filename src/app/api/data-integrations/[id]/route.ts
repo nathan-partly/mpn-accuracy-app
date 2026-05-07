@@ -26,8 +26,8 @@ export async function PUT(
       integration_date,
     } = body;
 
-    if (!name?.trim() || !type || !integration_date) {
-      return NextResponse.json({ error: "name, type, and integration_date are required" }, { status: 400 });
+    if (!name?.trim() || !type) {
+      return NextResponse.json({ error: "name and type are required" }, { status: 400 });
     }
     if (!["online", "offline"].includes(type)) {
       return NextResponse.json({ error: "type must be 'online' or 'offline'" }, { status: 400 });
@@ -37,8 +37,9 @@ export async function PUT(
     const brandIncrementalVal = brand_incremental && typeof brand_incremental === "object" && Object.keys(brand_incremental).length > 0
       ? JSON.stringify(brand_incremental)
       : null;
+    const dateVal: string | null = integration_date?.trim() || null;
 
-    const availabilityVal = ["available", "high_confidence", "low_confidence"].includes(data_availability)
+    const availabilityVal = ["integrated", "available", "high_confidence", "low_confidence"].includes(data_availability)
       ? data_availability : null;
 
     const rows = await sql`
@@ -58,7 +59,7 @@ export async function PUT(
         data_availability     = ${availabilityVal},
         annual_cost           = ${n(annual_cost)},
         cost_per_vin          = ${n(cost_per_vin)},
-        integration_date      = ${integration_date},
+        integration_date      = ${dateVal},
         updated_at            = NOW()
       WHERE id = ${id}
       RETURNING
