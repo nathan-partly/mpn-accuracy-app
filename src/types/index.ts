@@ -14,6 +14,8 @@ export interface Brand {
   // VIO data joined from quality snapshots
   vio_rank?: number | null;
   vio_combined_pct?: number | null;
+  // True if this brand has any VINs in the latest VIN coverage snapshot
+  has_vin_coverage?: boolean;
 }
 
 export interface BenchmarkSnapshot {

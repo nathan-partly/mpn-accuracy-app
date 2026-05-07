@@ -26,7 +26,9 @@ export default async function DashboardPage() {
   ]);
 
   const benchmarked        = brands.filter((b) => b.latest_snapshot_date);
-  const pending            = brands.filter((b) => !b.latest_snapshot_date);
+  // Only show brands as "pending" if Interpreter actually has coverage data for them.
+  // Brands with no VIN coverage have no data to benchmark against.
+  const pending            = brands.filter((b) => !b.latest_snapshot_date && b.has_vin_coverage);
   const highAccuracy       = benchmarked.filter((b) => Number(b.latest_accuracy_pct ?? 0) >= 99).length;
   const highAccuracySig    = benchmarked.filter((b) =>
     Number(b.latest_accuracy_pct ?? 0) >= 99 &&

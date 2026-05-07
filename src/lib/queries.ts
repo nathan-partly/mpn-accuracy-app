@@ -36,7 +36,9 @@ export async function getAllBrands(): Promise<Brand[]> {
       COUNT(s2.id)         AS snapshot_count,
       -- VIO data from latest quality snapshot, matched by brand name
       vq.vio_rank          AS vio_rank,
-      vq.vio_combined_pct  AS vio_combined_pct
+      vq.vio_combined_pct  AS vio_combined_pct,
+      -- Whether this brand has at least one VIN in the latest coverage snapshot
+      CASE WHEN vc.brand IS NOT NULL THEN true ELSE false END AS has_vin_coverage
     FROM brands b
     LEFT JOIN LATERAL (
       SELECT *
@@ -56,10 +58,21 @@ export async function getAllBrands(): Promise<Brand[]> {
       ORDER BY qs.snapshot_date DESC
       LIMIT 1
     ) vq ON true
+    -- Join latest VIN coverage snapshot to check if this brand has any covered VINs
+    LEFT JOIN LATERAL (
+      SELECT DISTINCT UPPER(cvd.input_make) AS brand
+      FROM coverage_vin_data cvd
+      JOIN (
+        SELECT id FROM coverage_vin_snapshots ORDER BY uploaded_at DESC LIMIT 1
+      ) latest_snap ON cvd.snapshot_id = latest_snap.id
+      WHERE UPPER(cvd.input_make) = UPPER(b.name)
+      LIMIT 1
+    ) vc ON true
     GROUP BY b.id, b.name, b.status, b.created_at,
              s.snapshot_date, s.accuracy_pct, s.active_vins,
              s.total_parts, s.valid_count, s.invalid_count,
-             vq.vio_rank, vq.vio_combined_pct
+             vq.vio_rank, vq.vio_combined_pct,
+             vc.brand
     ORDER BY b.name ASC
   `;
   return rows as Brand[];
