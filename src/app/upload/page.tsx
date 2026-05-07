@@ -57,6 +57,18 @@ export default function UploadPage() {
           const errors: string[] = [];
           const headers = results.meta.fields ?? [];
 
+          // Detect if the user uploaded a VIN coverage CSV (downloaded from the Coverage page)
+          // instead of an accuracy benchmark CSV. Give a helpful redirect instead of cryptic errors.
+          const isCoveragecsv =
+            headers.includes("make") &&
+            headers.includes("region") &&
+            headers.includes("coverage_status");
+          if (isCoveragecsv) {
+            setParseErrors(["__COVERAGE_CSV__"]);
+            setState("idle");
+            return;
+          }
+
           for (const col of REQUIRED_COLUMNS) {
             if (!headers.includes(col)) {
               errors.push(`Missing required column: "${col}"`);
@@ -354,7 +366,22 @@ export default function UploadPage() {
             }}
           />
 
-          {parseErrors.length > 0 && (
+          {parseErrors.length > 0 && parseErrors[0] === "__COVERAGE_CSV__" ? (
+            <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <p className="font-semibold text-blue-900 mb-1">This looks like a VIN coverage CSV</p>
+              <p className="text-blue-700 text-xs">
+                This file has <code className="bg-blue-100 px-1 rounded">Make</code>,{" "}
+                <code className="bg-blue-100 px-1 rounded">Region</code> and{" "}
+                <code className="bg-blue-100 px-1 rounded">Coverage Status</code> columns — that&apos;s
+                the format exported from the Coverage dashboard. To update the coverage data,
+                upload it at the{" "}
+                <a href="/coverage/upload" className="font-semibold underline hover:text-blue-900">
+                  Coverage snapshot upload page
+                </a>{" "}
+                instead.
+              </p>
+            </div>
+          ) : parseErrors.length > 0 && (
             <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 space-y-1">
               {parseErrors.map((e, i) => (
                 <p key={i}>{e}</p>
