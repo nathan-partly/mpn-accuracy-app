@@ -16,8 +16,15 @@ import type { RoadmapBrand, RoadmapBrandMeta, RoadmapResponse, Market } from "@/
 const TODAY_COLOR  = "#BBFCE8";
 const TODAY_STROKE = "#6EE7B7";
 const QUARTER_COLORS = ["#1E3A8A", "#E879A0", "#F97316", "#7C3AED", "#0EA5E9"];
+const TBD_COLOR    = "#9CA3AF"; // grey stripe fill for undated integrations
+const TBD_KEY      = "TBD";
 
-function quarterColor(i: number) {
+function quarterColor(q: string, i: number) {
+  if (q === TBD_KEY) return `url(#tbd-hatch)`;
+  return QUARTER_COLORS[i % QUARTER_COLORS.length];
+}
+function quarterSolidColor(q: string, i: number) {
+  if (q === TBD_KEY) return TBD_COLOR;
   return QUARTER_COLORS[i % QUARTER_COLORS.length];
 }
 
@@ -53,9 +60,12 @@ function CustomTooltip({
           <div key={entry.name} className="mb-1.5">
             <div className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
+                <span className="inline-block w-2 h-2 rounded-sm flex-shrink-0 border border-grey-300"
+                  style={{ background: entry.name === TBD_KEY ? "repeating-linear-gradient(-45deg,#9CA3AF,#9CA3AF 2px,transparent 2px,transparent 5px)" : entry.color }} />
                 <span className="text-grey-500">
-                  {entry.name === "today" ? "Current coverage" : `Gain (${entry.name})`}
+                  {entry.name === "today" ? "Current coverage"
+                    : entry.name === TBD_KEY ? "Gain (undated target)"
+                    : `Gain (${entry.name})`}
                 </span>
               </span>
               <span className="font-semibold text-grey-900 tabular-nums">{entry.value.toFixed(1)}%</span>
@@ -86,8 +96,13 @@ function Legend({ quarters }: { quarters: string[] }) {
       </span>
       {quarters.map((q, i) => (
         <span key={q} className="flex items-center gap-1.5 text-xs text-grey-500">
-          <span className="inline-block w-3 h-3 rounded-sm" style={{ background: quarterColor(i) }} />
-          {q}
+          {q === TBD_KEY ? (
+            <span className="inline-block w-3 h-3 rounded-sm border border-grey-300"
+              style={{ background: "repeating-linear-gradient(-45deg,#9CA3AF,#9CA3AF 2px,transparent 2px,transparent 5px)" }} />
+          ) : (
+            <span className="inline-block w-3 h-3 rounded-sm" style={{ background: quarterSolidColor(q, i) }} />
+          )}
+          {q === TBD_KEY ? "No date (lower confidence)" : q}
         </span>
       ))}
     </div>
@@ -122,6 +137,7 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
 
   const data: RoadmapBrand[] = roadmap?.data ?? [];
   const quarters: string[] = roadmap?.quarters ?? [];
+  const undatedKey: string | null = roadmap?.undatedKey ?? null;
 
   return (
     <div>
@@ -164,6 +180,12 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
               margin={{ top: 8, right: 8, bottom: 64, left: 0 }}
               barCategoryGap="30%"
             >
+              <defs>
+                <pattern id="tbd-hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(-45)">
+                  <rect width="6" height="6" fill="transparent" />
+                  <line x1="0" y1="0" x2="0" y2="6" stroke={TBD_COLOR} strokeWidth="2.5" strokeOpacity="0.55" />
+                </pattern>
+              </defs>
               <CartesianGrid stroke="#F3F4F6" strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="brand"
@@ -199,7 +221,9 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
                   key={q}
                   dataKey={q}
                   stackId="cov"
-                  fill={quarterColor(i)}
+                  fill={quarterColor(q, i)}
+                  stroke={q === TBD_KEY ? TBD_COLOR : undefined}
+                  strokeWidth={q === TBD_KEY ? 0.5 : 0}
                   isAnimationActive={false}
                 />
               ))}
@@ -211,6 +235,11 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
           {market !== "all" && quarters.length > 0 && (
             <p className="text-xs text-grey-300 text-center mt-2">
               Segment height = expected {market.toUpperCase()} coverage gain for that brand · capped at 100% total
+            </p>
+          )}
+          {undatedKey && (
+            <p className="text-xs text-grey-400 text-center mt-2">
+              Striped segments = undated future targets · timing unknown, lower confidence
             </p>
           )}
           {quarters.length === 0 && (

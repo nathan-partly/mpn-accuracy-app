@@ -34,6 +34,8 @@ export interface RoadmapResponse {
   data: RoadmapBrand[];
   quarters: string[];
   market: Market;
+  /** Present when at least one undated integration contributes gains; always "TBD" if set */
+  undatedKey: string | null;
 }
 
 type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
@@ -42,7 +44,7 @@ interface Integration {
   id: number;
   name: string;
   brands: string[];
-  integration_date: string;
+  integration_date: string | null;
   incremental_vio_pct: number | null;
   incremental_nz_pct: number | null;
   incremental_uk_pct: number | null;
@@ -200,7 +202,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     const freshRows = await sql`
       SELECT id, brand_incremental::text AS bi_fresh
       FROM data_integrations
-      WHERE integration_date > ${todayISO}
+      WHERE integration_date > ${todayISO} OR integration_date IS NULL
     `;
     const freshMap: Record<number, BrandIncrementalMap | null> = {};
     for (const row of freshRows as Array<{ id: number; bi_fresh: string | null }>) {
@@ -237,8 +239,10 @@ export async function GET(req: Request): Promise<NextResponse> {
   const brandQuarterIntegrations: Record<string, Record<string, string[]>> = {};
 
   for (const integ of integrations) {
-    if (!integ.integration_date || integ.integration_date < todayISO) continue;
-    const q = quarterLabel(integ.integration_date);
+    // Skip live integrations (past date) — they're already in "today"
+    if (integ.integration_date && integ.integration_date < todayISO) continue;
+    // Undated = "TBD" bucket (shown with hatching); dated future = its calendar quarter
+    const q = integ.integration_date ? quarterLabel(integ.integration_date) : "TBD";
     const totalIncremental = marketIncremental(integ, market);
     const brandCount = (integ.brands ?? []).length || 1;
 
@@ -338,9 +342,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     ...withoutGains.slice(0, Math.max(0, 35 - withGains.length)),
   ];
 
-  const quarters = Object.keys(quartersFound).sort(
-    (a, b) => quarterSortKey(a) - quarterSortKey(b)
-  );
+  const quarters = Object.keys(quartersFound)
+    .filter((q) => q !== "TBD")
+    .sort((a, b) => quarterSortKey(a) - quarterSortKey(b));
+  if (quartersFound["TBD"]) quarters.push("TBD");
 
   // Zero-fill quarter keys
   for (const row of topRows) {
@@ -397,7 +402,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       integrationsCount: integrations.length,
       rawDbRows,
       futureIntegrations: integrations
-        .filter((i) => i.integration_date > todayISO)
+        .filter((i) => !i.integration_date || i.integration_date > todayISO)
         .map((i) => ({
           integration_date: i.integration_date,
           brands: i.brands,
@@ -413,7 +418,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   return NextResponse.json(
-    { data: topRows, quarters, market } satisfies RoadmapResponse,
+    { data: topRows, quarters, market, undatedKey: quartersFound["TBD"] ? "TBD" : null } satisfies RoadmapResponse,
     { headers: { "Cache-Control": "no-store" } }
   );
 }
