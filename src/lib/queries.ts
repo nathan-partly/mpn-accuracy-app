@@ -58,7 +58,8 @@ export async function getAllBrands(): Promise<Brand[]> {
       ORDER BY qs.snapshot_date DESC
       LIMIT 1
     ) vq ON true
-    -- Join latest VIN coverage snapshot to check if this brand has any covered VINs
+    -- Join latest VIN coverage snapshot to check if this brand has at least one
+    -- covered VIN (gcs_found = true). Brands with only unsupported VINs are excluded.
     LEFT JOIN LATERAL (
       SELECT DISTINCT UPPER(cvd.input_make) AS brand
       FROM coverage_vin_data cvd
@@ -66,6 +67,7 @@ export async function getAllBrands(): Promise<Brand[]> {
         SELECT id FROM coverage_vin_snapshots ORDER BY uploaded_at DESC LIMIT 1
       ) latest_snap ON cvd.snapshot_id = latest_snap.id
       WHERE UPPER(cvd.input_make) = UPPER(b.name)
+        AND cvd.gcs_found = true
       LIMIT 1
     ) vc ON true
     GROUP BY b.id, b.name, b.status, b.created_at,
