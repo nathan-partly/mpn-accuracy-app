@@ -323,7 +323,7 @@ export function QualityBrandTable({ brands, trendRows = [] }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-grey-100">
-                {th("VIO Rank", "vio_rank", "center")}
+                <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest text-center">#</th>
                 {th("Brand", "brand", "left")}
                 {th("VIO %", "vio_pct", "right")}
                 <th className="px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Markets</th>
@@ -353,7 +353,7 @@ export function QualityBrandTable({ brands, trendRows = [] }: Props) {
                         className={`transition-colors ${hasTrend ? "cursor-pointer" : ""} ${isExpanded ? "bg-grey-50" : "hover:bg-grey-50"} ${!isExpanded && !isLast ? "border-b border-grey-50" : ""}`}
                       >
                         <td className="px-5 py-3.5 text-grey-400 text-xs tabular-nums text-center">
-                          {brand.vio_rank ?? "—"}
+                          {i + 1}
                         </td>
                         <td className="px-5 py-3.5 font-semibold text-grey-950">{brand.brand}</td>
                         <td className="px-5 py-3.5 text-right text-grey-700 tabular-nums font-medium">
