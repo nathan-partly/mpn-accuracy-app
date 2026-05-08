@@ -540,18 +540,18 @@ function blockRulesHtml(): string {
   /* Hardcoded block-rule impact data from VIN sample analysis (2026-04-29).
      brand (normalised UPPERCASE) → { ALL, UK, NZ } percentage of VINs blocked. */
   var RULE_DATA = {
-    TOYOTA:   { ALL: 2.56,  UK: 4.20,  NZ: 1.91 },
-    RENAULT:  { ALL: 0.20,  UK: 0.21,  NZ: 0.00 },
-    VAUXHALL: { ALL: 10.29, UK: 14.55, NZ: 0.00 },
-    FORD:     { ALL: 21.95, UK: 29.14, NZ: 14.35 },
-    NISSAN:   { ALL: 0.54,  UK: 0.00,  NZ: 0.92  },
-    SUZUKI:   { ALL: 20.57, UK: 27.07, NZ: 15.85 },
-    LEXUS:    { ALL: 3.33,  UK: 6.90,  NZ: 2.20  },
-    PEUGEOT:  { ALL: 28.08, UK: 30.02, NZ: 23.91 },
-    CITROEN:  { ALL: 28.08, UK: 30.02, NZ: 23.91 },
-    DS:       { ALL: 28.08, UK: 30.02, NZ: 23.91 },
-    TESLA:    { ALL: 42.11, UK: 42.67, NZ: 40.00 },
-    JEEP:     { ALL: 1.45,  UK: 1.96,  NZ: 0.00  },
+    TOYOTA:   { ALL: 4.78,  UK: 2.87,  NZ: 6.68  },
+    RENAULT:  { ALL: 1.50,  UK: 2.99,  NZ: 0.00  },
+    VAUXHALL: { ALL: 10.93, UK: 21.86, NZ: 0.00  },
+    FORD:     { ALL: 9.18,  UK: 10.58, NZ: 7.78  },
+    NISSAN:   { ALL: 0.46,  UK: 0.00,  NZ: 0.92  },
+    SUZUKI:   { ALL: 24.89, UK: 9.09,  NZ: 40.68 },
+    LEXUS:    { ALL: 5.56,  UK: 5.56,  NZ: 5.56  },
+    PEUGEOT:  { ALL: 24.33, UK: 24.76, NZ: 23.90 },
+    CITROEN:  { ALL: 20.34, UK: 16.78, NZ: 23.90 },
+    DS:       { ALL: 20.01, UK: 10.00, NZ: 30.02 },
+    TESLA:    { ALL: 43.49, UK: 40.30, NZ: 46.68 },
+    JEEP:     { ALL: 2.71,  UK: 5.41,  NZ: 0.00  },
   };
 
   function norm(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
