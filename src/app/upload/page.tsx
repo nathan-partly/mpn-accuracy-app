@@ -27,6 +27,7 @@ export default function UploadPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [state, setState] = useState<UploadState>("idle");
+  const [brandsLoading, setBrandsLoading] = useState(true);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
   const [brandGroups, setBrandGroups] = useState<BrandGroup[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
@@ -40,7 +41,8 @@ export default function UploadPage() {
   useEffect(() => {
     fetch("/api/brands")
       .then((r) => r.json())
-      .then((data) => setBrands(data ?? []));
+      .then((data) => { setBrands(data ?? []); setBrandsLoading(false); })
+      .catch(() => setBrandsLoading(false));
   }, []);
 
   const handleFile = useCallback(
@@ -338,10 +340,10 @@ export default function UploadPage() {
           </p>
 
           <div
-            onDrop={handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-grey-100 rounded-xl p-10 text-center cursor-pointer hover:border-brand-blue hover:bg-brand-tint transition-colors group"
+            onDrop={brandsLoading ? undefined : handleDrop}
+            onDragOver={brandsLoading ? undefined : (e) => e.preventDefault()}
+            onClick={brandsLoading ? undefined : () => fileRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors group ${brandsLoading ? "border-grey-100 bg-grey-50 cursor-wait" : "border-grey-100 cursor-pointer hover:border-brand-blue hover:bg-brand-tint"}`}
           >
             <div className="w-10 h-10 bg-grey-50 group-hover:bg-white rounded-lg flex items-center justify-center mx-auto mb-3 transition-colors">
               <svg className="w-5 h-5 text-grey-400 group-hover:text-brand-blue transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -349,7 +351,7 @@ export default function UploadPage() {
               </svg>
             </div>
             <p className="text-sm font-medium text-grey-950">
-              {state === "parsing" ? "Parsing…" : "Drop CSV here or click to browse"}
+              {brandsLoading ? "Loading brands…" : state === "parsing" ? "Parsing…" : "Drop CSV here or click to browse"}
             </p>
             <p className="text-xs text-grey-400 mt-1">
               Must include a <code className="bg-white border border-grey-100 px-1 rounded">brand</code> column — download the template below for the full format

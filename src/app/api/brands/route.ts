@@ -6,12 +6,21 @@ import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const brands = await getAllBrands();
-  return NextResponse.json(brands);
+  // If ?full=1 is passed return the full brand objects (used by the accuracy dashboard).
+  // The default lightweight response only returns id+name, which is all the upload page needs
+  // and avoids the slow lateral-join query timing out before the user can drop a file.
+  const url = new URL(req.url);
+  if (url.searchParams.get("full") === "1") {
+    const brands = await getAllBrands();
+    return NextResponse.json(brands);
+  }
+
+  const rows = await sql`SELECT id, name FROM brands ORDER BY name ASC`;
+  return NextResponse.json(rows);
 }
 
 export async function POST(req: Request) {
