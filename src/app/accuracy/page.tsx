@@ -29,11 +29,16 @@ export default async function DashboardPage() {
   // Only show brands as "pending" if Interpreter actually has coverage data for them.
   // Brands with no VIN coverage have no data to benchmark against.
   const pending            = brands.filter((b) => !b.latest_snapshot_date && b.has_vin_coverage);
-  const highAccuracy       = benchmarked.filter((b) => Number(b.latest_accuracy_pct ?? 0) >= 99).length;
-  const highAccuracySig    = benchmarked.filter((b) =>
-    Number(b.latest_accuracy_pct ?? 0) >= 99 &&
-    Number(b.latest_total_vins  ?? 0) >= 50  &&
-    Number(b.latest_total_parts ?? 0) >= 500
+  // Brands with meaningful data: ≥10 VINs and ≥50 parts measured
+  const withData           = benchmarked.filter((b) =>
+    Number(b.latest_total_vins  ?? 0) >= 10 &&
+    Number(b.latest_total_parts ?? 0) >= 50
+  );
+  // Brands with total coverage and significant sample: 100% accuracy, ≥20 VINs, ≥200 parts
+  const perfectAccuracy    = benchmarked.filter((b) =>
+    Number(b.latest_accuracy_pct ?? 0) === 100 &&
+    Number(b.latest_total_vins   ?? 0) >= 20  &&
+    Number(b.latest_total_parts  ?? 0) >= 200
   ).length;
 
   return (
@@ -74,14 +79,14 @@ export default async function DashboardPage() {
           highlight
         />
         <KpiCard
-          label="Brands ≥ 99%"
-          value={highAccuracy}
-          sub={`of ${benchmarked.length} benchmarked`}
+          label="Brands with Data"
+          value={`${withData.length} / ${benchmarked.length}`}
+          sub="≥10 VINs · ≥50 parts measured"
         />
         <KpiCard
-          label="≥ 99% (sig.)"
-          value={highAccuracySig}
-          sub="≥50 VINs · ≥500 parts"
+          label="100% Accuracy"
+          value={perfectAccuracy}
+          sub="≥20 VINs · ≥200 parts"
         />
         <KpiCard
           label="VINs Checked"
