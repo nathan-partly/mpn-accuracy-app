@@ -1028,6 +1028,7 @@ function brandsCoveredStatHtml(): string {
 
     /* count ALL brands with at least 1 covered VIN — unaffected by the minN filter */
     var withCoverage = brands.filter(function (b) { return b.y > 0; }).length;
+    var totalBrands  = brands.length;
 
     /* re-use or create the card element */
     var card = document.getElementById('kpi-brands-covered');
@@ -1040,7 +1041,9 @@ function brandsCoveredStatHtml(): string {
     card.innerHTML = '<div class="kbar" style="background:#10B981"></div>'
       + '<div class="kpi-body">'
       + '<div class="klbl">Brands with Coverage</div>'
-      + '<div class="kval" style="color:#10B981">' + withCoverage + '</div>'
+      + '<div class="kval" style="color:#10B981">' + withCoverage
+        + '<span style="font-size:14px;font-weight:500;color:#9CA3AF"> / ' + totalBrands + '</span>'
+        + '</div>'
       + '<div class="ksub">≥ 1 VIN supported</div>'
       + '</div>';
   }
