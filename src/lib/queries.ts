@@ -62,13 +62,15 @@ export async function getAllBrands(): Promise<Brand[]> {
     -- to see if this brand has at least one covered VIN (y > 0 in the ALL aggregate).
     -- This is the authoritative source — brands that appear in the dashboard with 0%
     -- coverage (y = 0) are excluded from pending benchmarking.
+    -- Check the LATEST coverage snapshot only to see if this brand has y > 0
     LEFT JOIN LATERAL (
       SELECT 1 AS has_coverage
-      FROM coverage_snapshots cs
-      CROSS JOIN LATERAL jsonb_array_elements(cs.data_json::jsonb->'ALL') AS elem
+      FROM (
+        SELECT data_json FROM coverage_snapshots ORDER BY created_at DESC LIMIT 1
+      ) latest_cs
+      CROSS JOIN LATERAL jsonb_array_elements(latest_cs.data_json::jsonb->'ALL') AS elem
       WHERE UPPER(elem->>'make') = UPPER(b.name)
         AND (elem->>'y')::int > 0
-      ORDER BY cs.created_at DESC
       LIMIT 1
     ) vc ON true
     GROUP BY b.id, b.name, b.status, b.created_at,
