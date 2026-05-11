@@ -1026,9 +1026,8 @@ function brandsCoveredStatHtml(): string {
     var kpisEl = document.getElementById('kpis');
     if (!kpisEl) return;
 
-    /* count brands with at least 1 covered VIN */
-    var minN = parseInt(((document.getElementById('minN') || {}).value) || '10');
-    var withCoverage = brands.filter(function (b) { return b.total >= minN && b.y > 0; }).length;
+    /* count ALL brands with at least 1 covered VIN — unaffected by the minN filter */
+    var withCoverage = brands.filter(function (b) { return b.y > 0; }).length;
 
     /* re-use or create the card element */
     var card = document.getElementById('kpi-brands-covered');
