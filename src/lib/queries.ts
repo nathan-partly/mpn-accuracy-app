@@ -38,7 +38,7 @@ export async function getAllBrands(): Promise<Brand[]> {
       vq.vio_rank          AS vio_rank,
       vq.vio_combined_pct  AS vio_combined_pct,
       -- Whether this brand has at least one VIN in the latest coverage snapshot
-      CASE WHEN vc.brand IS NOT NULL THEN true ELSE false END AS has_vin_coverage
+      CASE WHEN vc.has_coverage IS NOT NULL THEN true ELSE false END AS has_vin_coverage
     FROM brands b
     LEFT JOIN LATERAL (
       SELECT *
@@ -58,23 +58,24 @@ export async function getAllBrands(): Promise<Brand[]> {
       ORDER BY qs.snapshot_date DESC
       LIMIT 1
     ) vq ON true
-    -- Join latest VIN coverage snapshot to check if this brand has at least one
-    -- covered VIN (gcs_found = true). Brands with only unsupported VINs are excluded.
+    -- Check coverage_snapshots.data_json (the source that drives the coverage dashboard)
+    -- to see if this brand has at least one covered VIN (y > 0 in the ALL aggregate).
+    -- This is the authoritative source — brands that appear in the dashboard with 0%
+    -- coverage (y = 0) are excluded from pending benchmarking.
     LEFT JOIN LATERAL (
-      SELECT DISTINCT UPPER(cvd.input_make) AS brand
-      FROM coverage_vin_data cvd
-      JOIN (
-        SELECT id FROM coverage_vin_snapshots ORDER BY uploaded_at DESC LIMIT 1
-      ) latest_snap ON cvd.snapshot_id = latest_snap.id
-      WHERE UPPER(cvd.input_make) = UPPER(b.name)
-        AND cvd.gcs_found = true
+      SELECT 1 AS has_coverage
+      FROM coverage_snapshots cs
+      CROSS JOIN LATERAL jsonb_array_elements(cs.data_json::jsonb->'ALL') AS elem
+      WHERE UPPER(elem->>'make') = UPPER(b.name)
+        AND (elem->>'y')::int > 0
+      ORDER BY cs.created_at DESC
       LIMIT 1
     ) vc ON true
     GROUP BY b.id, b.name, b.status, b.created_at,
              s.snapshot_date, s.accuracy_pct, s.active_vins,
              s.total_parts, s.valid_count, s.invalid_count,
              vq.vio_rank, vq.vio_combined_pct,
-             vc.brand
+             vc.has_coverage
     ORDER BY b.name ASC
   `;
   return rows as Brand[];
