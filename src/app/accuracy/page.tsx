@@ -79,9 +79,9 @@ export default async function DashboardPage() {
           highlight
         />
         <KpiCard
-          label="Brands with Data"
-          value={`${withData.length} / ${benchmarked.length}`}
-          sub="≥10 VINs · ≥50 parts measured"
+          label="Brands Benchmarked"
+          value={`${benchmarked.length} / ${benchmarked.length + pending.length}`}
+          sub="of brands Interpreter supports"
         />
         <KpiCard
           label="100% Accuracy"
