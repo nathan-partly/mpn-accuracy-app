@@ -111,7 +111,6 @@ export default async function QualityPage() {
             <div className="flex gap-2">
               <span className="font-bold text-violet-600 mt-0.5 shrink-0">L3</span>
               <div>
-                <p className="font-semibold text-grey-700 mb-0.5">Premium production support</p>
                 <ul className="space-y-0.5 text-grey-400">
                   <li>≥80% of parts classified as HCAs</li>
                   <li>≥80% of diagrams annotated</li>
@@ -125,7 +124,6 @@ export default async function QualityPage() {
             <div className="flex gap-2">
               <span className="font-bold text-brand-blue mt-0.5 shrink-0">L2</span>
               <div>
-                <p className="font-semibold text-grey-700 mb-0.5">High-quality production support</p>
                 <ul className="space-y-0.5 text-grey-400">
                   <li>≥70% of parts classified as HCAs</li>
                   <li>≥70% of diagrams annotated</li>
@@ -140,7 +138,6 @@ export default async function QualityPage() {
             <div className="flex gap-2">
               <span className="font-bold text-emerald-700 mt-0.5 shrink-0">L1</span>
               <div>
-                <p className="font-semibold text-grey-700 mb-0.5">Passable production support</p>
                 <ul className="space-y-0.5 text-grey-400">
                   <li>≥20% of parts classified as HCAs</li>
                   <li>≥20% of diagrams annotated</li>
@@ -153,7 +150,6 @@ export default async function QualityPage() {
             <div className="flex gap-2">
               <span className="font-bold text-amber-600 mt-0.5 shrink-0">L0</span>
               <div>
-                <p className="font-semibold text-grey-700 mb-0.5">Not ready for production</p>
                 <ul className="space-y-0.5 text-grey-400">
                   <li>EPC data integrated but incomplete or untested</li>
                   <li>Diagrams may be unprocessed or partially processed</li>
