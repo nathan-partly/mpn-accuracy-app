@@ -64,7 +64,7 @@ function QualityGates({ brand }: { brand: QualityBrandData }) {
   const gates = [
     { met: !!brand.req_diagram_cleanup,    label: "Diagram cleanup" },
     { met: !!brand.req_titles_rephrased,   label: "Titles rephrased" },
-    { met: !!brand.req_irrelevant_removed, label: "Irrelevant removed" },
+    { met: !!brand.req_irrelevant_removed, label: "Irrelevant diagrams removed" },
     { met: !!brand.req_part_variant_l2,    label: "Part variant ≥ OEM" },
   ];
   return (
@@ -199,7 +199,7 @@ function BrandTrendPanel({ rows }: { rows: QualityTrendRow[] }) {
 type SortKey = "vio_rank" | "brand" | "vio_pct" | "classification" | "annotation" | "level";
 type SortDir = "asc" | "desc";
 
-const LEVEL_ORDER: Record<string, number> = { L2: 0, L1: 1, L0: 2, Unsupported: 3 };
+const LEVEL_ORDER: Record<string, number> = { L3: 0, L2: 1, L1: 2, L0: 3, Unsupported: 4 };
 
 function SortIcon({ dir }: { dir: SortDir | null }) {
   if (!dir) return (

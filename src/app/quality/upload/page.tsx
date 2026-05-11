@@ -143,7 +143,8 @@ export default function QualityUploadPage() {
   const levelFor = (c: number | null, a: number | null) => {
     const cv = c ?? 0;
     const av = a ?? 0;
-    if (cv >= 80 && av >= 80) return { label: "L2", color: "text-brand-blue" };
+    if (cv >= 80 && av >= 80) return { label: "L3", color: "text-violet-600" };
+    if (cv >= 70 && av >= 70) return { label: "L2", color: "text-brand-blue" };
     if (cv >= 20 && av >= 20) return { label: "L1", color: "text-emerald-700" };
     if (cv > 0 || av > 0) return { label: "L0", color: "text-amber-600" };
     return { label: "—", color: "text-grey-400" };

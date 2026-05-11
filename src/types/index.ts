@@ -120,7 +120,7 @@ export interface ProviderAccuracyStat {
 
 // ─── Quality ─────────────────────────────────────────────────────────────────
 
-export type BrandLevel = "L2" | "L1" | "L0" | "Unsupported";
+export type BrandLevel = "L3" | "L2" | "L1" | "L0" | "Unsupported";
 
 /** One row from getQualityTrendAllBrands — every brand × snapshot combination */
 export interface QualityTrendRow {

@@ -54,6 +54,7 @@ export default async function QualityPage() {
 
   const { snapshot, brands } = latest;
 
+  const l3 = brands.filter((b) => b.level === "L3");
   const l2 = brands.filter((b) => b.level === "L2");
   const l1 = brands.filter((b) => b.level === "L1");
   const l0 = brands.filter((b) => b.level === "L0");
@@ -63,6 +64,7 @@ export default async function QualityPage() {
   const vioSum = (group: typeof brands) =>
     group.reduce((sum, b) => sum + (b.vio_combined_pct != null ? Number(b.vio_combined_pct) / 4 : 0), 0);
 
+  const l3Vio = vioSum(l3);
   const l2Vio = vioSum(l2);
   const l1Vio = vioSum(l1);
   const l0Vio = vioSum(l0);
@@ -92,8 +94,9 @@ export default async function QualityPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <KpiCard label="Level 2 Brands" value={l2.length} sub={`Representing ${l2Vio.toFixed(1)}% of global VIO`} highlight />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+        <KpiCard label="Level 3 Brands" value={l3.length} sub={`Representing ${l3Vio.toFixed(1)}% of global VIO`} highlight />
+        <KpiCard label="Level 2 Brands" value={l2.length} sub={`Representing ${l2Vio.toFixed(1)}% of global VIO`} />
         <KpiCard label="Level 1 Brands" value={l1.length} sub={`Representing ${l1Vio.toFixed(1)}% of global VIO`} />
         <KpiCard label="Level 0 Brands" value={l0.length} sub={`Representing ${l0Vio.toFixed(1)}% of global VIO`} />
         <KpiCard label="Unsupported" value={unsupported.length} sub={`Representing ${unsupportedVio.toFixed(1)}% of global VIO`} />
@@ -104,14 +107,28 @@ export default async function QualityPage() {
         <div className="h-1 bg-brand-blue" />
         <div className="px-5 py-4 text-xs text-grey-500">
           <div className="flex flex-wrap gap-x-8 gap-y-3">
+            {/* L3 */}
+            <div className="flex gap-2 min-w-48">
+              <span className="font-bold text-violet-600 mt-0.5 shrink-0">L3</span>
+              <div>
+                <p className="font-semibold text-grey-700 mb-0.5">Premium production support</p>
+                <ul className="space-y-0.5 text-grey-400">
+                  <li>≥80% of parts classified as HCAs</li>
+                  <li>≥80% of diagrams annotated</li>
+                  <li>Origin tracing support</li>
+                  <li>Part to part links support</li>
+                  <li>Generic parts support</li>
+                </ul>
+              </div>
+            </div>
             {/* L2 */}
             <div className="flex gap-2 min-w-48">
               <span className="font-bold text-brand-blue mt-0.5 shrink-0">L2</span>
               <div>
                 <p className="font-semibold text-grey-700 mb-0.5">High-quality production support</p>
                 <ul className="space-y-0.5 text-grey-400">
-                  <li>≥80% of parts classified as HCAs</li>
-                  <li>≥80% of diagrams annotated</li>
+                  <li>≥70% of parts classified as HCAs</li>
+                  <li>≥70% of diagrams annotated</li>
                   <li>Diagram cleanup complete (symbols, watermarks, boxes removed)</li>
                   <li>Titles &amp; part descriptions rephrased</li>
                   <li>Irrelevant diagrams removed</li>

@@ -533,7 +533,8 @@ export async function getGlobalStats() {
 function computeLevel(classification_pct: number | null, annotation_pct: number | null): BrandLevel {
   const c = classification_pct ?? 0;
   const a = annotation_pct ?? 0;
-  if (c >= 80 && a >= 80) return "L2";
+  if (c >= 80 && a >= 80) return "L3";
+  if (c >= 70 && a >= 70) return "L2";
   if (c >= 20 && a >= 20) return "L1";
   if (c > 0 || a > 0) return "L0";
   return "Unsupported";

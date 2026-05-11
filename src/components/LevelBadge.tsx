@@ -2,6 +2,10 @@ import clsx from "clsx";
 import type { BrandLevel } from "@/types";
 
 const config: Record<BrandLevel, { label: string; classes: string }> = {
+  L3: {
+    label: "Level 3",
+    classes: "bg-violet-50 text-violet-600 border-violet-200",
+  },
   L2: {
     label: "Level 2",
     classes: "bg-brand-tint text-brand-blue border-brand-blue/20",
