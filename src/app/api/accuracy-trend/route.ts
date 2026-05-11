@@ -4,11 +4,11 @@ import { sql } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export interface AccuracyTrendPoint {
-  date: string;            // ISO date string (snapshot_date)
+  date: string;                // ISO date string (snapshot_date)
   overall_accuracy_pct: number;
   brands_total: number;
-  brands_high: number;     // ≥ 99%
-  brands_high_sig: number; // ≥ 99% AND ≥50 VINs AND ≥500 parts
+  brands_benchmarked: number;  // brands with a snapshot (any sample size)
+  brands_perfect: number;      // 100% accuracy AND ≥20 VINs AND ≥200 parts
   total_vins: number;
   total_parts: number;
   valid_count: number;
@@ -49,14 +49,12 @@ export async function GET(): Promise<NextResponse> {
         WHEN COALESCE(SUM(total_parts), 0) = 0 THEN 0
         ELSE ROUND(SUM(valid_count)::numeric / SUM(total_parts) * 100, 2)
       END                                                                   AS overall_accuracy_pct,
+      COUNT(*)                                                               AS brands_benchmarked,
       COUNT(*) FILTER (
-        WHERE accuracy_pct >= 99
-      )                                                                     AS brands_high,
-      COUNT(*) FILTER (
-        WHERE accuracy_pct >= 99
-          AND active_vins  >= 50
-          AND total_parts  >= 500
-      )                                                                     AS brands_high_sig
+        WHERE accuracy_pct = 100
+          AND active_vins  >= 20
+          AND total_parts  >= 200
+      )                                                                     AS brands_perfect
     FROM latest_per_brand_per_date
     GROUP BY snapshot_date
     ORDER BY snapshot_date
@@ -66,8 +64,8 @@ export async function GET(): Promise<NextResponse> {
     date:                 String(r.date),
     overall_accuracy_pct: Number(r.overall_accuracy_pct),
     brands_total:         Number(r.brands_total),
-    brands_high:          Number(r.brands_high),
-    brands_high_sig:      Number(r.brands_high_sig),
+    brands_benchmarked:   Number(r.brands_benchmarked),
+    brands_perfect:       Number(r.brands_perfect),
     total_vins:           Number(r.total_vins),
     total_parts:          Number(r.total_parts),
     valid_count:          Number(r.valid_count),

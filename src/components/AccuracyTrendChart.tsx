@@ -16,11 +16,11 @@ import type { AccuracyTrendPoint } from "@/app/api/accuracy-trend/route";
 
 // ── Metric toggles ────────────────────────────────────────────────────────────
 const METRICS = [
-  { key: "overall_accuracy_pct", label: "Overall Accuracy %", color: "#1E3A8A", axis: "pct", type: "line" },
-  { key: "brands_high",          label: "Brands ≥ 99%",       color: "#E879A0", axis: "count", type: "line" },
-  { key: "brands_high_sig",      label: "≥ 99% (sig.)",       color: "#F97316", axis: "count", type: "line" },
-  { key: "total_vins",           label: "VINs Checked",       color: "#7C3AED", axis: "volume", type: "bar" },
-  { key: "total_parts",          label: "Parts Validated",    color: "#0EA5E9", axis: "volume", type: "bar" },
+  { key: "overall_accuracy_pct", label: "Overall Accuracy %",  color: "#1E3A8A", axis: "pct",    type: "line" },
+  { key: "brands_benchmarked",   label: "Brands Benchmarked",  color: "#E879A0", axis: "count",  type: "line" },
+  { key: "brands_perfect",       label: "100% Accuracy",       color: "#F97316", axis: "count",  type: "line" },
+  { key: "total_vins",           label: "VINs Checked",        color: "#7C3AED", axis: "volume", type: "bar"  },
+  { key: "total_parts",          label: "Parts Validated",     color: "#0EA5E9", axis: "volume", type: "bar"  },
 ] as const;
 
 type MetricKey = (typeof METRICS)[number]["key"];
@@ -72,7 +72,7 @@ export function AccuracyTrendChart() {
   const [data, setData] = useState<AccuracyTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMetrics, setActiveMetrics] = useState<Set<MetricKey>>(
-    new Set<MetricKey>(["overall_accuracy_pct", "brands_high", "brands_high_sig"])
+    new Set<MetricKey>(["overall_accuracy_pct", "brands_benchmarked", "brands_perfect"])
   );
 
   useEffect(() => {
