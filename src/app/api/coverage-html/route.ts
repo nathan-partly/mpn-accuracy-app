@@ -994,11 +994,18 @@ function vinInsightsHtml(): string {
 <\/script>`;
 }
 
-// ── Brands with coverage hero stat ───────────────────────────────────────────
-// Hooks renderHero to append a "Brands with coverage" stat showing how many
-// brands have at least 1 covered VIN (y > 0) in the current region's dataset.
+// ── Brands with coverage KPI card ────────────────────────────────────────────
+// Hooks renderHero to append a 5th KPI card to #kpis showing how many brands
+// have at least 1 covered VIN (y > 0) in the current region's dataset.
 function brandsCoveredStatHtml(): string {
   return `
+<style>
+  /* Expand KPI grid from 4 → 5 columns on desktop */
+  .kpis { grid-template-columns: repeat(5, 1fr) !important; }
+  @media (max-width: 640px) {
+    .kpis { grid-template-columns: 1fr 1fr !important; }
+  }
+</style>
 <script>
 (function () {
   function hookRenderHero() {
@@ -1006,32 +1013,39 @@ function brandsCoveredStatHtml(): string {
     var _orig = renderHero;
     renderHero = function (brands) {
       _orig(brands);
-      var heroStats = document.getElementById('heroStats');
-      if (!heroStats) return;
-      /* count brands with at least 1 covered VIN */
-      var minN = parseInt(((document.getElementById('minN') || {}).value) || '10');
-      var withCoverage = brands.filter(function (b) { return b.total >= minN && b.y > 0; }).length;
-      var allBrands    = brands.filter(function (b) { return b.total >= minN; }).length;
-      /* inject as an extra hstat after existing ones */
-      if (!document.getElementById('hstat-brands-covered')) {
-        var div = document.createElement('div');
-        div.id = 'hstat-brands-covered';
-        div.className = 'hstat';
-        heroStats.appendChild(div);
-      }
-      var el = document.getElementById('hstat-brands-covered');
-      if (el) {
-        el.innerHTML = '<div class="hv">' + withCoverage + '</div>'
-          + '<div class="hl">Brands with Coverage</div>';
-      }
+      injectKpiCard(brands);
     };
     /* trigger immediately if data already rendered */
-    var region = (typeof window.region !== 'undefined' ? window.region : null)
-      || 'ALL';
-    if (typeof DATA !== 'undefined' && DATA[region]) {
-      renderHero(DATA[region]);
+    var currentRegion = (typeof window.region !== 'undefined' ? window.region : null) || 'ALL';
+    if (typeof DATA !== 'undefined' && DATA[currentRegion]) {
+      injectKpiCard(DATA[currentRegion]);
     }
   }
+
+  function injectKpiCard(brands) {
+    var kpisEl = document.getElementById('kpis');
+    if (!kpisEl) return;
+
+    /* count brands with at least 1 covered VIN */
+    var minN = parseInt(((document.getElementById('minN') || {}).value) || '10');
+    var withCoverage = brands.filter(function (b) { return b.total >= minN && b.y > 0; }).length;
+
+    /* re-use or create the card element */
+    var card = document.getElementById('kpi-brands-covered');
+    if (!card) {
+      card = document.createElement('div');
+      card.id        = 'kpi-brands-covered';
+      card.className = 'kpi';
+      kpisEl.appendChild(card);
+    }
+    card.innerHTML = '<div class="kbar" style="background:#10B981"></div>'
+      + '<div class="kpi-body">'
+      + '<div class="klbl">Brands with Coverage</div>'
+      + '<div class="kval" style="color:#10B981">' + withCoverage + '</div>'
+      + '<div class="ksub">≥ 1 VIN supported</div>'
+      + '</div>';
+  }
+
   hookRenderHero();
 })();
 <\/script>`;
