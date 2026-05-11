@@ -72,12 +72,16 @@ function trendChartHtml(): string {
 
     if (canvas) canvas.style.display = 'block';
 
+    var today = todayISO();
+
+    /* exclude undated (TBD) integrations — they have no date to plot */
+    var dated  = integrations.filter(function(i) { return !!i.integration_date; });
+
     /* sort by date ascending */
-    var sorted = integrations.slice().sort(function(a, b) {
+    var sorted = dated.slice().sort(function(a, b) {
       return a.integration_date.localeCompare(b.integration_date);
     });
 
-    var today = todayISO();
     var past   = sorted.filter(function(i) { return i.integration_date <  today; });
     var future = sorted.filter(function(i) { return i.integration_date >= today; });
 
@@ -990,6 +994,49 @@ function vinInsightsHtml(): string {
 <\/script>`;
 }
 
+// ── Brands with coverage hero stat ───────────────────────────────────────────
+// Hooks renderHero to append a "Brands with coverage" stat showing how many
+// brands have at least 1 covered VIN (y > 0) in the current region's dataset.
+function brandsCoveredStatHtml(): string {
+  return `
+<script>
+(function () {
+  function hookRenderHero() {
+    if (typeof renderHero === 'undefined') { setTimeout(hookRenderHero, 80); return; }
+    var _orig = renderHero;
+    renderHero = function (brands) {
+      _orig(brands);
+      var heroStats = document.getElementById('heroStats');
+      if (!heroStats) return;
+      /* count brands with at least 1 covered VIN */
+      var minN = parseInt(((document.getElementById('minN') || {}).value) || '10');
+      var withCoverage = brands.filter(function (b) { return b.total >= minN && b.y > 0; }).length;
+      var allBrands    = brands.filter(function (b) { return b.total >= minN; }).length;
+      /* inject as an extra hstat after existing ones */
+      if (!document.getElementById('hstat-brands-covered')) {
+        var div = document.createElement('div');
+        div.id = 'hstat-brands-covered';
+        div.className = 'hstat';
+        heroStats.appendChild(div);
+      }
+      var el = document.getElementById('hstat-brands-covered');
+      if (el) {
+        el.innerHTML = '<div class="hv">' + withCoverage + '</div>'
+          + '<div class="hl">Brands with Coverage</div>';
+      }
+    };
+    /* trigger immediately if data already rendered */
+    var region = (typeof window.region !== 'undefined' ? window.region : null)
+      || 'ALL';
+    if (typeof DATA !== 'undefined' && DATA[region]) {
+      renderHero(DATA[region]);
+    }
+  }
+  hookRenderHero();
+})();
+<\/script>`;
+}
+
 // ── Inject integration counts before </body> ──────────────────────────────────
 function injectIntegrationCounts(html: string): string {
   const MARKER = '</body>';
@@ -1000,6 +1047,7 @@ function injectIntegrationCounts(html: string): string {
     integrationCountsHtml() + "\n" +
     blockRulesHtml() + "\n" +
     vinInsightsHtml() + "\n" +
+    brandsCoveredStatHtml() + "\n" +
     html.slice(idx)
   );
 }
