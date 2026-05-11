@@ -530,11 +530,23 @@ export async function getGlobalStats() {
 
 // ─── Quality ──────────────────────────────────────────────────────────────────
 
-function computeLevel(classification_pct: number | null, annotation_pct: number | null): BrandLevel {
+function computeLevel(
+  classification_pct: number | null,
+  annotation_pct: number | null,
+  gates?: {
+    req_diagram_cleanup: boolean | null;
+    req_titles_rephrased: boolean | null;
+    req_irrelevant_removed: boolean | null;
+    req_part_variant_l2: boolean | null;
+  }
+): BrandLevel {
   const c = classification_pct ?? 0;
   const a = annotation_pct ?? 0;
+  const allGatesMet = gates
+    ? !!(gates.req_diagram_cleanup && gates.req_titles_rephrased && gates.req_irrelevant_removed && gates.req_part_variant_l2)
+    : false;
   if (c >= 80 && a >= 80) return "L3";
-  if (c >= 70 && a >= 70) return "L2";
+  if (c >= 70 && a >= 70 && allGatesMet) return "L2";
   if (c >= 20 && a >= 20) return "L1";
   if (c > 0 || a > 0) return "L0";
   return "Unsupported";
@@ -580,7 +592,12 @@ export async function getLatestQualitySnapshot(): Promise<{ snapshot: QualitySna
 
   const brands = (rows as Omit<QualityBrandData, "level">[]).map((r) => ({
     ...r,
-    level: computeLevel(r.classification_pct, r.annotation_pct),
+    level: computeLevel(r.classification_pct, r.annotation_pct, {
+      req_diagram_cleanup:    r.req_diagram_cleanup,
+      req_titles_rephrased:   r.req_titles_rephrased,
+      req_irrelevant_removed: r.req_irrelevant_removed,
+      req_part_variant_l2:    r.req_part_variant_l2,
+    }),
   }));
 
   return { snapshot, brands };

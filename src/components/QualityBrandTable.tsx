@@ -365,7 +365,7 @@ export function QualityBrandTable({ brands, trendRows = [] }: Props) {
                           <MarketPills brand={brand} />
                         </td>
                         <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
-                          <CoverageBar value={brand.classification_pct} threshold={80} />
+                          <CoverageBar value={brand.classification_pct} threshold={70} />
                         </td>
                         <td className="px-5 py-3.5" style={{ minWidth: 160 }}>
                           <CoverageBar value={brand.annotation_pct} threshold={80} />

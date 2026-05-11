@@ -106,9 +106,9 @@ export default async function QualityPage() {
       <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden mb-6">
         <div className="h-1 bg-brand-blue" />
         <div className="px-5 py-4 text-xs text-grey-500">
-          <div className="flex flex-wrap gap-x-8 gap-y-3">
+          <div className="grid grid-cols-4 gap-6">
             {/* L3 */}
-            <div className="flex gap-2 min-w-48">
+            <div className="flex gap-2">
               <span className="font-bold text-violet-600 mt-0.5 shrink-0">L3</span>
               <div>
                 <p className="font-semibold text-grey-700 mb-0.5">Premium production support</p>
@@ -122,7 +122,7 @@ export default async function QualityPage() {
               </div>
             </div>
             {/* L2 */}
-            <div className="flex gap-2 min-w-48">
+            <div className="flex gap-2">
               <span className="font-bold text-brand-blue mt-0.5 shrink-0">L2</span>
               <div>
                 <p className="font-semibold text-grey-700 mb-0.5">High-quality production support</p>
@@ -137,7 +137,7 @@ export default async function QualityPage() {
               </div>
             </div>
             {/* L1 */}
-            <div className="flex gap-2 min-w-48">
+            <div className="flex gap-2">
               <span className="font-bold text-emerald-700 mt-0.5 shrink-0">L1</span>
               <div>
                 <p className="font-semibold text-grey-700 mb-0.5">Passable production support</p>
@@ -150,7 +150,7 @@ export default async function QualityPage() {
               </div>
             </div>
             {/* L0 */}
-            <div className="flex gap-2 min-w-40">
+            <div className="flex gap-2">
               <span className="font-bold text-amber-600 mt-0.5 shrink-0">L0</span>
               <div>
                 <p className="font-semibold text-grey-700 mb-0.5">Not ready for production</p>
