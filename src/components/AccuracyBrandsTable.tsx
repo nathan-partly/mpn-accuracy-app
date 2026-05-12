@@ -165,10 +165,24 @@ export function AccuracyBrandsTable({ brands }: { brands: Brand[] }) {
                       : <span className="text-grey-300">—</span>}
                   </td>
                   <td className="px-5 py-3.5 text-right text-grey-900">
-                    {brand.latest_total_vins?.toLocaleString() ?? "—"}
+                    <span className="flex items-center justify-end gap-1.5">
+                      {Number(brand.latest_total_vins ?? 0) < 10 && (
+                        <span className="text-xs font-semibold text-grey-400 bg-grey-50 border border-grey-100 rounded px-1.5 py-0.5">
+                          thin
+                        </span>
+                      )}
+                      {brand.latest_total_vins?.toLocaleString() ?? "—"}
+                    </span>
                   </td>
                   <td className="px-5 py-3.5 text-right text-grey-900">
-                    {brand.latest_total_parts?.toLocaleString() ?? "—"}
+                    <span className="flex items-center justify-end gap-1.5">
+                      {Number(brand.latest_total_parts ?? 0) < 50 && (
+                        <span className="text-xs font-semibold text-grey-400 bg-grey-50 border border-grey-100 rounded px-1.5 py-0.5">
+                          thin
+                        </span>
+                      )}
+                      {brand.latest_total_parts?.toLocaleString() ?? "—"}
+                    </span>
                   </td>
                   <td className="px-5 py-3.5 text-right text-emerald-700 font-medium">
                     {brand.latest_valid_count?.toLocaleString() ?? "—"}

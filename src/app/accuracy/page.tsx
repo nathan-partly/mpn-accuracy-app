@@ -53,7 +53,7 @@ export default async function DashboardPage() {
             Interpreter Accuracy Benchmarking
           </h1>
           <p className="text-grey-400 text-sm mt-1">
-            MPN accuracy validation across all benchmarked brands · {benchmarked.length} benchmarked · {pending.length} pending
+            MPN accuracy validation across all benchmarked brands · {benchmarked.length} benchmarked · {pending.length} pending · min sample ≥10 VINs &amp; ≥50 parts
           </p>
         </div>
         <div className="flex items-start gap-3">
@@ -81,7 +81,7 @@ export default async function DashboardPage() {
         <KpiCard
           label="Brands Benchmarked"
           value={`${benchmarked.length} / ${benchmarked.length + pending.length}`}
-          sub="of brands Interpreter supports"
+          sub="≥10 VINs · ≥50 parts to qualify"
         />
         <KpiCard
           label="100% Accuracy"
