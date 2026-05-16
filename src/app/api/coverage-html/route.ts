@@ -865,11 +865,27 @@ function hideTabsStyle(): string {
 function injectInitialRegion(html: string, region: string): string {
   const VALID = ["ALL", "UK", "US", "NZ", "AU"];
   const safe = VALID.includes(region) ? region : "ALL";
-  // Replace the initial region variable declaration
   return html.replace(
     /let region\s*=\s*['"][^'"]*['"]/,
     `let region='${safe}'`
   );
+}
+
+// ── Inject postMessage listener so region switches from the parent page are instant ──
+// The parent sends { type: 'setRegion', region: 'UK' } and the iframe switches
+// its region variable and re-renders — no network request needed.
+function injectPostMessageListener(html: string): string {
+  const listener = `
+<script>
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'setRegion') return;
+  var valid = ['ALL','UK','US','NZ','AU'];
+  if (valid.indexOf(e.data.region) === -1) return;
+  region = e.data.region;
+  renderAll();
+});
+<\/script>`;
+  return html.replace("</body>", listener + "\n</body>");
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -913,14 +929,17 @@ export async function GET(req: NextRequest) {
     // Fall through — the HTML still has its own embedded DATA
   }
 
-  // 3. Set the initial region and hide the iframe's own tab strip
+  // 3. Set the initial region, hide the iframe's tab strip, add postMessage listener
   html = injectInitialRegion(html, regionParam);
   html = html.replace("</head>", `${hideTabsStyle()}</head>`);
+  html = injectPostMessageListener(html);
 
+  // Cache for 60s so switching back to a recently-viewed snapshot is instant.
+  // The parent page uses postMessage for region switches (no refetch at all).
   return new NextResponse(injectIntegrationCounts(injectTrendChart(html)), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-store",
+      "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
     },
   });
 }

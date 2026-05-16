@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface Snapshot {
   id: number;
@@ -27,11 +27,23 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
+function buildSrc(region: string, snapshotId: number | null) {
+  const p = new URLSearchParams({ r: region });
+  if (snapshotId) p.set("snapshot", String(snapshotId));
+  return `/api/coverage-html?${p.toString()}`;
+}
+
 export default function CoveragePage() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Iframe controlled via ref — we only update src when the snapshot changes.
+  // Region-only changes are handled via postMessage (instant, no network request).
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeSrc, setIframeSrc] = useState(buildSrc("ALL", null));
+  const lastSnapshotRef = useRef<number | null | "INIT">("INIT");
 
   useEffect(() => {
     fetch("/api/coverage-samples")
@@ -43,26 +55,41 @@ export default function CoveragePage() {
       .catch(() => setLoading(false));
   }, []);
 
+  // Decide whether to reload the iframe (snapshot changed) or postMessage (region only)
+  useEffect(() => {
+    if (lastSnapshotRef.current === "INIT") {
+      lastSnapshotRef.current = selectedSnapshotId;
+      return;
+    }
+
+    if (lastSnapshotRef.current !== selectedSnapshotId) {
+      // Different data needed — update the iframe src (browser navigates in place)
+      setIframeSrc(buildSrc(selectedRegion, selectedSnapshotId));
+      lastSnapshotRef.current = selectedSnapshotId;
+    } else {
+      // Same data, different region — instant switch via postMessage, no reload
+      iframeRef.current?.contentWindow?.postMessage(
+        { type: "setRegion", region: selectedRegion },
+        "*"
+      );
+    }
+  }, [selectedRegion, selectedSnapshotId]);
+
   const handleRegionChange = useCallback((region: string) => {
     setSelectedRegion(region);
-    setSelectedSnapshotId(null); // reset to "latest" whenever region changes
+    setSelectedSnapshotId(null);
   }, []);
 
   const handleSnapshotSelect = useCallback((id: number | null) => {
     setSelectedSnapshotId(id);
   }, []);
 
-  // Build iframe src — always pass the region so the iframe auto-selects the right tab
-  const params = new URLSearchParams({ r: selectedRegion });
-  if (selectedSnapshotId) params.set("snapshot", String(selectedSnapshotId));
-  const iframeSrc = `/api/coverage-html?${params.toString()}`;
-
   // Snapshots for the selected region only (not shown for All Regions)
   const regionSnapshots = selectedRegion !== "ALL"
     ? snapshots.filter((s) => s.region === selectedRegion)
     : [];
-  const nonBaseline = regionSnapshots.filter((s) => !s.is_baseline);
-  const baseline    = regionSnapshots.filter((s) => s.is_baseline);
+  const nonBaseline  = regionSnapshots.filter((s) => !s.is_baseline);
+  const baseline     = regionSnapshots.filter((s) => s.is_baseline);
   const pillSnapshots = [...nonBaseline, ...baseline];
 
   return (
@@ -118,7 +145,6 @@ export default function CoveragePage() {
       {selectedRegion !== "ALL" && (
         <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto">
 
-          {/* "Latest" pill */}
           <button
             onClick={() => handleSnapshotSelect(null)}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors flex-shrink-0 ${
@@ -180,10 +206,10 @@ export default function CoveragePage() {
         </div>
       )}
 
-      {/* ── Dashboard iframe ── */}
+      {/* ── Dashboard iframe — no key prop; src updates navigate in place ── */}
       <div className="flex-1 overflow-hidden">
         <iframe
-          key={iframeSrc}
+          ref={iframeRef}
           src={iframeSrc}
           style={{ width: "100%", height: "100%", border: "none" }}
           title="VIN Coverage Dashboard"
