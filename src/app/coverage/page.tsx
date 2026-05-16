@@ -14,7 +14,7 @@ interface Snapshot {
   created_at: string;
 }
 
-// "ALL" = combined/aggregate view (latest per brand, trend hidden)
+// "ALL" = combined/aggregate view (latest per brand)
 // number = specific snapshot ID
 type SnapshotSelection = "ALL" | number;
 
@@ -31,22 +31,8 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function buildSrc(region: string, sel: SnapshotSelection): string {
-  const p = new URLSearchParams({ r: region });
-  if (typeof sel === "number") {
-    p.set("snapshot", String(sel));
-  } else if (sel === "ALL" && region !== "ALL") {
-    // "All" pill within a specific region — combined view, trend chart hidden
-    p.set("hideTrend", "1");
-  }
-  return `/api/coverage-html?${p.toString()}`;
-}
-
 /** Most recent non-baseline snapshot for a region, or "ALL" if none. */
-function defaultSelectionForRegion(
-  region: string,
-  snapshots: Snapshot[]
-): SnapshotSelection {
+function defaultSelectionForRegion(region: string, snapshots: Snapshot[]): SnapshotSelection {
   if (region === "ALL") return "ALL";
   const nonBaseline = snapshots
     .filter((s) => s.region === region && !s.is_baseline)
@@ -55,18 +41,53 @@ function defaultSelectionForRegion(
 }
 
 export default function CoveragePage() {
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshots, setSnapshots]           = useState<Snapshot[]>([]);
   const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
-  const [selectedSel, setSelectedSel] = useState<SnapshotSelection>("ALL");
-  const [loading, setLoading] = useState(true);
+  const [selectedSel, setSelectedSel]       = useState<SnapshotSelection>("ALL");
+  const [loading, setLoading]               = useState(true);
 
-  // Iframe controlled via ref.
-  // Snapshot selection changes → update src (iframe navigates in place).
-  // Region changes while same selection → postMessage (instant, no reload).
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeSrc, setIframeSrc] = useState(buildSrc("ALL", "ALL"));
-  const lastSelRef = useRef<SnapshotSelection | "INIT">("INIT");
+  // ── Iframe refs ──────────────────────────────────────────────────────────────
+  // The iframe is loaded ONCE (on mount) and never reloaded.
+  // All subsequent changes go via postMessage — region switches are instant,
+  // snapshot switches fetch a small JSON payload then postMessage it in.
+  const iframeRef      = useRef<HTMLIFrameElement>(null);
+  const iframeReady    = useRef(false);      // true after first onLoad
+  const isFirstRender  = useRef(true);       // skip postMessage on initial mount
+  const dataCache      = useRef(new Map<string, Record<string, unknown[]>>());
 
+  // ── Fetch data and postMessage it to the iframe ───────────────────────────────
+  const sendData = useCallback(async (region: string, sel: SnapshotSelection) => {
+    const cacheKey = typeof sel === "number" ? `snap:${sel}` : "combined";
+
+    let data = dataCache.current.get(cacheKey);
+    if (!data) {
+      const params = new URLSearchParams();
+      if (typeof sel === "number") params.set("snapshot", String(sel));
+      try {
+        const res = await fetch(`/api/coverage-data?${params.toString()}`);
+        if (!res.ok) return;
+        data = await res.json() as Record<string, unknown[]>;
+        dataCache.current.set(cacheKey, data);
+      } catch { return; }
+    }
+
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "setData", data, region },
+      "*"
+    );
+  }, []);
+
+  // ── Drive iframe on selection change ──────────────────────────────────────────
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return; // initial data is already embedded in the iframe HTML
+    }
+    if (!iframeReady.current) return;
+    sendData(selectedRegion, selectedSel);
+  }, [selectedRegion, selectedSel, sendData]);
+
+  // ── Load snapshots list ────────────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/coverage-samples")
       .then((r) => r.json())
@@ -77,61 +98,47 @@ export default function CoveragePage() {
       .catch(() => setLoading(false));
   }, []);
 
-  // When snapshots load, auto-select for the initial region
+  // ── Auto-select most recent snapshot once snapshots list has loaded ───────
   useEffect(() => {
     if (!loading && snapshots.length > 0 && selectedRegion !== "ALL") {
       const sel = defaultSelectionForRegion(selectedRegion, snapshots);
       setSelectedSel(sel);
-      setIframeSrc(buildSrc(selectedRegion, sel));
-      lastSelRef.current = sel;
+      // Don't wait for the effect above — kick off data fetch immediately
+      if (iframeReady.current) sendData(selectedRegion, sel);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  // Drive the iframe: reload on selection change, postMessage on region-only change
-  useEffect(() => {
-    if (lastSelRef.current === "INIT") {
-      lastSelRef.current = selectedSel;
-      return;
-    }
-    if (lastSelRef.current !== selectedSel) {
-      setIframeSrc(buildSrc(selectedRegion, selectedSel));
-      lastSelRef.current = selectedSel;
-    } else {
-      // Same data, different region — instant via postMessage
-      iframeRef.current?.contentWindow?.postMessage(
-        { type: "setRegion", region: selectedRegion },
-        "*"
-      );
-    }
-  }, [selectedRegion, selectedSel]);
+  const handleIframeLoad = useCallback(() => {
+    iframeReady.current = true;
+  }, []);
 
   const handleRegionChange = useCallback((region: string) => {
     setSelectedRegion(region);
-    // Auto-select most recent snapshot for this region (or "ALL" if none)
     setSelectedSel((prev) => {
       const next = defaultSelectionForRegion(region, snapshots);
-      // If selection didn't change we still need the iframe to update region.
-      // Force it by treating as a selection change via a tiny side-effect.
-      if (next === prev) {
-        setIframeSrc(buildSrc(region, next));
-        lastSelRef.current = next;
+      // If selection didn't change, the effect won't fire — trigger manually
+      if (next === prev && iframeReady.current) {
+        sendData(region, next);
       }
       return next;
     });
-  }, [snapshots]);
+  }, [snapshots, sendData]);
 
   const handleSelectionChange = useCallback((sel: SnapshotSelection) => {
     setSelectedSel(sel);
   }, []);
 
-  // Snapshots for the selected region (pills only shown for non-"ALL" main tab)
+  // Snapshots for the selected region (pills only for non-"ALL" main tab)
   const regionSnapshots = selectedRegion !== "ALL"
     ? snapshots.filter((s) => s.region === selectedRegion)
     : [];
-  const nonBaseline  = regionSnapshots.filter((s) => !s.is_baseline);
-  const baseline     = regionSnapshots.filter((s) => s.is_baseline);
+  const nonBaseline   = regionSnapshots.filter((s) => !s.is_baseline);
+  const baseline      = regionSnapshots.filter((s) => s.is_baseline);
   const pillSnapshots = [...nonBaseline, ...baseline];
+
+  // Initial iframe src — only set once; all changes go via postMessage
+  const initialSrc = `/api/coverage-html?r=${selectedRegion}`;
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
@@ -182,11 +189,11 @@ export default function CoveragePage() {
         ))}
       </div>
 
-      {/* ── Snapshot pills — only for specific regions, not "All Regions" main tab ── */}
+      {/* ── Snapshot pills — only for specific regions ── */}
       {selectedRegion !== "ALL" && (
         <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto">
 
-          {/* "All" pill — combined view across all snapshots, trend hidden */}
+          {/* "All" pill — combined view across all snapshots */}
           <button
             onClick={() => handleSelectionChange("ALL")}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors flex-shrink-0 ${
@@ -245,11 +252,12 @@ export default function CoveragePage() {
         </div>
       )}
 
-      {/* ── Dashboard iframe ── */}
+      {/* ── Dashboard iframe — loaded once; all updates via postMessage ── */}
       <div className="flex-1 overflow-hidden">
         <iframe
           ref={iframeRef}
-          src={iframeSrc}
+          src={initialSrc}
+          onLoad={handleIframeLoad}
           style={{ width: "100%", height: "100%", border: "none" }}
           title="VIN Coverage Dashboard"
         />

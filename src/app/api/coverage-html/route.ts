@@ -5,6 +5,33 @@ import { join } from "path";
 
 export const dynamic = "force-dynamic";
 
+// ── Module-level template cache ───────────────────────────────────────────────
+// The HTML template rarely changes, so we cache it in memory to avoid a DB
+// round-trip on every request. TTL = 5 minutes.
+let _templateCache: string | null = null;
+let _templateCachedAt = 0;
+const TEMPLATE_TTL_MS = 5 * 60 * 1000;
+
+async function getTemplateHtml(): Promise<string | null> {
+  const now = Date.now();
+  if (_templateCache && now - _templateCachedAt < TEMPLATE_TTL_MS) {
+    return _templateCache;
+  }
+  let html: string | null = null;
+  try {
+    const latest = await getLatestCoverageSnapshot();
+    if (latest?.html_content) html = latest.html_content;
+  } catch { /* fall through */ }
+  if (!html) {
+    try {
+      html = readFileSync(join(process.cwd(), "public", "coverage-dashboard.html"), "utf-8");
+    } catch { return null; }
+  }
+  _templateCache = html;
+  _templateCachedAt = now;
+  return html;
+}
+
 // ── Coverage Rate Trend chart ─────────────────────────────────────────────────
 // Data is driven entirely by the /api/data-integrations table.
 // Past integrations (date <= today) render as solid lines (actual).
@@ -871,18 +898,33 @@ function injectInitialRegion(html: string, region: string): string {
   );
 }
 
-// ── Inject postMessage listener so region switches from the parent page are instant ──
-// The parent sends { type: 'setRegion', region: 'UK' } and the iframe switches
-// its region variable and re-renders — no network request needed.
+// ── Inject postMessage listener ───────────────────────────────────────────────
+// Handles two message types from the parent page:
+//   { type: 'setRegion', region: 'UK' }
+//       — instant region switch, re-renders with existing DATA
+//   { type: 'setData', data: {...}, region: 'UK' }
+//       — replaces DATA entirely then switches region and re-renders;
+//         used when the user picks a different snapshot (avoids a full page reload)
 function injectPostMessageListener(html: string): string {
   const listener = `
 <script>
 window.addEventListener('message', function(e) {
-  if (!e.data || e.data.type !== 'setRegion') return;
+  if (!e.data) return;
   var valid = ['ALL','UK','US','NZ','AU'];
-  if (valid.indexOf(e.data.region) === -1) return;
-  region = e.data.region;
-  renderAll();
+  if (e.data.type === 'setRegion') {
+    if (valid.indexOf(e.data.region) === -1) return;
+    region = e.data.region;
+    renderAll();
+  } else if (e.data.type === 'setData') {
+    // Swap the entire DATA object then re-render — no iframe reload needed
+    if (e.data.data) {
+      Object.keys(e.data.data).forEach(function(k) { DATA[k] = e.data.data[k]; });
+    }
+    if (e.data.region && valid.indexOf(e.data.region) !== -1) {
+      region = e.data.region;
+    }
+    renderAll();
+  }
 });
 <\/script>`;
   return html.replace("</body>", listener + "\n</body>");
@@ -896,26 +938,10 @@ export async function GET(req: NextRequest) {
   const hideTrend     = searchParams.get("hideTrend") === "1";
   const snapshotId = snapshotParam ? parseInt(snapshotParam, 10) : undefined;
 
-  // 1. Get HTML template from legacy coverage_snapshots (or static file)
-  let html: string | null = null;
-
-  try {
-    const latest = await getLatestCoverageSnapshot();
-    if (latest?.html_content) html = latest.html_content;
-  } catch {
-    // fall through to static file
-  }
-
-  if (!html) {
-    try {
-      html = readFileSync(
-        join(process.cwd(), "public", "coverage-dashboard.html"),
-        "utf-8"
-      );
-    } catch {
-      return new NextResponse("Coverage dashboard not found", { status: 404 });
-    }
-  }
+  // 1. Get HTML template (served from module-level cache after first load)
+  const template = await getTemplateHtml();
+  if (!template) return new NextResponse("Coverage dashboard not found", { status: 404 });
+  let html = template;
 
   // 2. Build DATA from new sample tables (latest-per-brand or specific snapshot)
   try {
