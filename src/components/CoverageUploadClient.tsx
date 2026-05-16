@@ -5,18 +5,27 @@ import { useRouter } from "next/navigation";
 
 type UploadState = "idle" | "dragging" | "ready" | "uploading" | "success" | "error";
 
+interface UploadResult {
+  region: string;
+  id: number;
+  brands: number;
+}
+
 export function CoverageUploadClient() {
   const [state, setState] = useState<UploadState>("idle");
   const [file, setFile] = useState<File | null>(null);
+  const [notes, setNotes] = useState("");
+  const [snapshotDate, setSnapshotDate] = useState(
+    () => new Date().toISOString().split("T")[0]
+  );
   const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<UploadResult[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   function acceptFile(f: File) {
-    const isCsv = f.name.endsWith(".csv");
-    const isHtml = f.name.endsWith(".html");
-    if (!isCsv && !isHtml) {
-      setError("Please select a .csv or .html file.");
+    if (!f.name.endsWith(".csv")) {
+      setError("Please select a .csv file.");
       setState("error");
       return;
     }
@@ -30,7 +39,7 @@ export function CoverageUploadClient() {
     setState("idle");
     const f = e.dataTransfer.files[0];
     if (f) acceptFile(f);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -53,14 +62,17 @@ export function CoverageUploadClient() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/coverage/upload", {
+      fd.append("snapshot_date", snapshotDate);
+      if (notes.trim()) fd.append("notes", notes.trim());
+
+      const res = await fetch("/api/coverage-samples", {
         method: "POST",
         body: fd,
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Upload failed");
-      }
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+
+      setResults(data.snapshots ?? []);
       setState("success");
       router.refresh();
     } catch (err) {
@@ -73,10 +85,13 @@ export function CoverageUploadClient() {
     setState("idle");
     setFile(null);
     setError(null);
+    setResults(null);
+    setNotes("");
+    setSnapshotDate(new Date().toISOString().split("T")[0]);
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  if (state === "success") {
+  if (state === "success" && results) {
     return (
       <div className="flex flex-col items-center justify-center py-8 gap-3">
         <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center">
@@ -84,14 +99,29 @@ export function CoverageUploadClient() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
         </div>
-        <p className="text-sm font-semibold text-grey-950">Coverage dashboard updated!</p>
-        <p className="text-xs text-grey-400">The new data is live — refresh the Coverage tab to see it.</p>
-        <button
-          onClick={reset}
-          className="mt-2 text-xs text-brand-blue font-semibold hover:underline"
-        >
-          Upload another file
-        </button>
+        <p className="text-sm font-semibold text-grey-950">Snapshot saved!</p>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {results.map((r) => (
+            <span key={r.id} className="text-xs text-grey-600 bg-grey-50 border border-grey-100 px-2.5 py-1 rounded-full">
+              {r.region} · {r.brands} brands · <span className="text-grey-400">#{r.id}</span>
+            </span>
+          ))}
+        </div>
+        <p className="text-xs text-grey-400">The dashboard now shows the latest data for each brand.</p>
+        <div className="flex gap-3 mt-2">
+          <button
+            onClick={() => window.location.href = "/coverage"}
+            className="text-xs text-brand-blue font-semibold hover:underline"
+          >
+            View dashboard →
+          </button>
+          <button
+            onClick={reset}
+            className="text-xs text-grey-500 font-semibold hover:underline"
+          >
+            Upload another
+          </button>
+        </div>
       </div>
     );
   }
@@ -101,7 +131,7 @@ export function CoverageUploadClient() {
   const isUploading = state === "uploading";
 
   return (
-    <div>
+    <div className="space-y-4">
       {/* Drop zone */}
       <div
         onDrop={onDrop}
@@ -121,7 +151,7 @@ export function CoverageUploadClient() {
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.html,text/csv,text/html"
+          accept=".csv,text/csv"
           className="hidden"
           onChange={onFileChange}
         />
@@ -144,16 +174,41 @@ export function CoverageUploadClient() {
               </svg>
             </div>
             <p className="text-sm font-semibold text-grey-950">
-              {isDragging ? "Drop it here" : "Drop coverage-data.csv here"}
+              {isDragging ? "Drop it here" : "Drop your CSV here"}
             </p>
-            <p className="text-xs text-grey-400">or click to browse · .csv or .html accepted</p>
+            <p className="text-xs text-grey-400">or click to browse · Make, Region, VIN, Coverage Status columns required</p>
           </div>
         )}
       </div>
 
+      {/* Metadata fields */}
+      {(file || isReady) && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-grey-600 mb-1">Snapshot date</label>
+            <input
+              type="date"
+              value={snapshotDate}
+              onChange={(e) => setSnapshotDate(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-grey-200 rounded-lg focus:outline-none focus:border-brand-blue"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-grey-600 mb-1">Notes (optional)</label>
+            <input
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="e.g. UK sample May 2026"
+              className="w-full px-3 py-1.5 text-sm border border-grey-200 rounded-lg focus:outline-none focus:border-brand-blue"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Error message */}
       {error && (
-        <div className="mt-3 flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
+        <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2.5">
           <svg className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
           </svg>
@@ -162,7 +217,7 @@ export function CoverageUploadClient() {
       )}
 
       {/* Upload button */}
-      <div className="mt-4 flex gap-3">
+      <div className="flex gap-3">
         <button
           onClick={handleUpload}
           disabled={!file || isUploading}
@@ -174,22 +229,19 @@ export function CoverageUploadClient() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
-              Uploading…
+              Saving snapshot…
             </>
           ) : (
             <>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
-              Upload snapshot
+              Save snapshot
             </>
           )}
         </button>
         {file && !isUploading && (
-          <button
-            onClick={reset}
-            className="px-4 py-2 text-sm font-semibold text-grey-500 hover:text-grey-700 transition-colors"
-          >
+          <button onClick={reset} className="px-4 py-2 text-sm font-semibold text-grey-500 hover:text-grey-700 transition-colors">
             Clear
           </button>
         )}

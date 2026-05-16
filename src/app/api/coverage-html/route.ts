@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getLatestCoverageSnapshot } from "@/lib/queries";
+import { NextRequest, NextResponse } from "next/server";
+import { getLatestCoverageSnapshot, getCoverageDashboardData } from "@/lib/queries";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -1068,8 +1068,28 @@ function injectIntegrationCounts(html: string): string {
   );
 }
 
+// ── Inject dynamic DATA from new snapshot tables ───────────────────────────────
+function injectDataIntoHtml(html: string, data: Record<string, unknown[]>): string {
+  const marker = "const DATA = ";
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx === -1) return html; // no DATA to replace — return as-is
+  const jsonStart = html.indexOf("{", markerIdx + marker.length);
+  if (jsonStart === -1) return html;
+  let depth = 0, i = jsonStart;
+  for (; i < html.length; i++) {
+    if (html[i] === "{") depth++;
+    else if (html[i] === "}") { depth--; if (depth === 0) break; }
+  }
+  return html.slice(0, markerIdx) + `const DATA = ${JSON.stringify(data)}` + html.slice(i + 1);
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const snapshotParam = searchParams.get("snapshot");
+  const snapshotId = snapshotParam ? parseInt(snapshotParam, 10) : undefined;
+
+  // 1. Get HTML template from legacy coverage_snapshots (or static file)
   let html: string | null = null;
 
   try {
@@ -1088,6 +1108,19 @@ export async function GET() {
     } catch {
       return new NextResponse("Coverage dashboard not found", { status: 404 });
     }
+  }
+
+  // 2. Build DATA from new sample tables (latest-per-brand or specific snapshot)
+  try {
+    const dynamicData = await getCoverageDashboardData(
+      snapshotId && !isNaN(snapshotId) ? snapshotId : undefined
+    );
+    if (Object.keys(dynamicData).some((k) => dynamicData[k].length > 0)) {
+      html = injectDataIntoHtml(html, dynamicData as Record<string, unknown[]>);
+    }
+  } catch (err) {
+    console.error("[coverage-html] Failed to load dynamic data, using embedded DATA:", err);
+    // Fall through — the HTML still has its own embedded DATA
   }
 
   return new NextResponse(injectIntegrationCounts(injectTrendChart(html)), {

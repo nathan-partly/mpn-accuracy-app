@@ -856,3 +856,141 @@ export async function getAllCoverageSnapshots(): Promise<CoverageSnapshot[]> {
   `;
   return rows as CoverageSnapshot[];
 }
+
+// ─── Coverage Sample Snapshots (new time-series system) ───────────────────────
+
+export interface CoverageSampleSnapshot {
+  id: number;
+  region: string;
+  snapshot_date: string;
+  uploaded_by: string | null;
+  notes: string | null;
+  row_count: number | null;
+  is_baseline: boolean;
+  created_at: string;
+}
+
+export interface CoverageSampleRow {
+  make: string;
+  logo: string;
+  y: number;
+  n: number;
+  total: number;
+  rate: number;
+  share: number;
+}
+
+/** List all sample snapshots, newest first. */
+export async function getCoverageSampleSnapshots(): Promise<CoverageSampleSnapshot[]> {
+  const rows = await sql`
+    SELECT id, region, snapshot_date::text, uploaded_by, notes, row_count, is_baseline, created_at
+    FROM coverage_sample_snapshots
+    ORDER BY snapshot_date DESC, created_at DESC
+  `;
+  return rows as CoverageSampleSnapshot[];
+}
+
+/** List snapshots for a specific region only. */
+export async function getCoverageSampleSnapshotsByRegion(region: string): Promise<CoverageSampleSnapshot[]> {
+  const rows = await sql`
+    SELECT id, region, snapshot_date::text, uploaded_by, notes, row_count, is_baseline, created_at
+    FROM coverage_sample_snapshots
+    WHERE region = ${region}
+    ORDER BY snapshot_date DESC, created_at DESC
+  `;
+  return rows as CoverageSampleSnapshot[];
+}
+
+/** Rows for a specific snapshot. */
+export async function getCoverageSampleRows(snapshotId: number): Promise<CoverageSampleRow[]> {
+  const rows = await sql`
+    SELECT make, logo, y, n, total, rate::float, share::float
+    FROM coverage_sample_rows
+    WHERE snapshot_id = ${snapshotId}
+    ORDER BY total DESC
+  `;
+  return rows as CoverageSampleRow[];
+}
+
+/**
+ * "Latest per brand" DATA object for the dashboard.
+ * For each region, returns the most recent row for each make across all
+ * snapshots for that region. Non-baseline snapshots take precedence over
+ * baseline for the same date.
+ *
+ * If snapshotId is provided, returns data for that specific snapshot's region;
+ * other regions still use latest-per-brand fallback.
+ */
+export async function getCoverageDashboardData(
+  snapshotId?: number
+): Promise<Record<string, CoverageSampleRow[]>> {
+  const regions = ["UK", "NZ", "AU", "US", "ALL"];
+  const data: Record<string, CoverageSampleRow[]> = {};
+
+  let pinnedRegion: string | null = null;
+  let pinnedRows: CoverageSampleRow[] | null = null;
+
+  if (snapshotId) {
+    // Get the pinned snapshot's region and rows
+    const snap = await sql`
+      SELECT region FROM coverage_sample_snapshots WHERE id = ${snapshotId}
+    `;
+    if (snap[0]) {
+      pinnedRegion = snap[0].region as string;
+      const rows = await sql`
+        SELECT make, logo, y, n, total, rate::float, share::float
+        FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
+        ORDER BY total DESC
+      `;
+      pinnedRows = rows as CoverageSampleRow[];
+    }
+  }
+
+  for (const region of regions) {
+    if (pinnedRegion && region === pinnedRegion && pinnedRows) {
+      data[region] = pinnedRows;
+      continue;
+    }
+
+    // Latest per brand: for each make, pick the row from the most recent snapshot
+    const rows = await sql`
+      SELECT DISTINCT ON (r.make)
+        r.make, r.logo,
+        r.y::int, r.n::int, r.total::int,
+        r.rate::float, r.share::float
+      FROM coverage_sample_rows r
+      JOIN coverage_sample_snapshots s ON s.id = r.snapshot_id
+      WHERE s.region = ${region}
+      ORDER BY r.make, s.snapshot_date DESC, s.is_baseline ASC, s.created_at DESC
+    `;
+    data[region] = rows as CoverageSampleRow[];
+  }
+
+  return data;
+}
+
+/** Save a new coverage sample snapshot and its rows. Returns the new snapshot id. */
+export async function saveCoverageSampleSnapshot(
+  region: string,
+  snapshotDate: string,
+  rows: CoverageSampleRow[],
+  uploadedBy?: string,
+  notes?: string
+): Promise<number> {
+  const [snap] = await sql`
+    INSERT INTO coverage_sample_snapshots (region, snapshot_date, uploaded_by, notes, row_count, is_baseline)
+    VALUES (${region}, ${snapshotDate}, ${uploadedBy ?? null}, ${notes ?? null}, ${rows.length}, FALSE)
+    RETURNING id
+  `;
+  const snapId = snap.id as number;
+
+  // Insert rows in chunks to avoid query size limits
+  for (const row of rows) {
+    await sql`
+      INSERT INTO coverage_sample_rows (snapshot_id, make, logo, y, n, total, rate, share)
+      VALUES (${snapId}, ${row.make}, ${row.logo}, ${row.y}, ${row.n}, ${row.total}, ${row.rate}, ${row.share})
+    `;
+  }
+
+  return snapId;
+}
