@@ -937,15 +937,17 @@ export async function getCoverageDashboardData(
     `;
     const pinnedRegion = snap[0]?.region as string | undefined;
 
-    const rows = pinnedRegion ? await sql`
+    const rawRows = pinnedRegion ? await sql`
       SELECT make, logo, y, n, total, rate::float, share::float
       FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
       ORDER BY total DESC
     ` : [];
+    // HTML template requires yv/nv arrays — we don't store them, so provide empty arrays
+    const rows = (rawRows as CoverageSampleRow[]).map((r) => ({ ...r, yv: [], nv: [] }));
 
     for (const region of regions) {
       if (region === pinnedRegion || region === "ALL") {
-        data[region] = rows as CoverageSampleRow[];
+        data[region] = rows;
       } else {
         data[region] = [];
       }
@@ -955,7 +957,7 @@ export async function getCoverageDashboardData(
 
   // Latest-per-brand: for each region, pick the most recent row per make
   for (const region of regions) {
-    const rows = await sql`
+    const rawRows = await sql`
       SELECT DISTINCT ON (r.make)
         r.make, r.logo,
         r.y::int, r.n::int, r.total::int,
@@ -965,7 +967,8 @@ export async function getCoverageDashboardData(
       WHERE s.region = ${region}
       ORDER BY r.make, s.snapshot_date DESC, s.is_baseline ASC, s.created_at DESC
     `;
-    data[region] = rows as CoverageSampleRow[];
+    // HTML template requires yv/nv arrays — we don't store them, so provide empty arrays
+    data[region] = (rawRows as CoverageSampleRow[]).map((r) => ({ ...r, yv: [], nv: [] }));
   }
 
   return data;
