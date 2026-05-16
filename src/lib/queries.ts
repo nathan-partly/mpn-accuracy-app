@@ -914,12 +914,13 @@ export async function getCoverageSampleRows(snapshotId: number): Promise<Coverag
 
 /**
  * "Latest per brand" DATA object for the dashboard.
- * For each region, returns the most recent row for each make across all
- * snapshots for that region. Non-baseline snapshots take precedence over
- * baseline for the same date.
  *
- * If snapshotId is provided, returns data for that specific snapshot's region;
- * other regions still use latest-per-brand fallback.
+ * Default (no snapshotId): for each region, returns the most recent row for
+ * each brand across all snapshots — the "latest per brand" merged view.
+ *
+ * With snapshotId: returns ONLY that snapshot's region with its exact data.
+ * All other regions are set to empty arrays so the iframe's region tabs show
+ * "no data" rather than misleading baseline figures.
  */
 export async function getCoverageDashboardData(
   snapshotId?: number
@@ -927,32 +928,30 @@ export async function getCoverageDashboardData(
   const regions = ["UK", "NZ", "AU", "US", "ALL"];
   const data: Record<string, CoverageSampleRow[]> = {};
 
-  let pinnedRegion: string | null = null;
-  let pinnedRows: CoverageSampleRow[] | null = null;
-
   if (snapshotId) {
-    // Get the pinned snapshot's region and rows
+    // Specific snapshot — only populate its region, leave others empty
     const snap = await sql`
       SELECT region FROM coverage_sample_snapshots WHERE id = ${snapshotId}
     `;
-    if (snap[0]) {
-      pinnedRegion = snap[0].region as string;
-      const rows = await sql`
-        SELECT make, logo, y, n, total, rate::float, share::float
-        FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
-        ORDER BY total DESC
-      `;
-      pinnedRows = rows as CoverageSampleRow[];
+    const pinnedRegion = snap[0]?.region as string | undefined;
+
+    for (const region of regions) {
+      if (region === pinnedRegion) {
+        const rows = await sql`
+          SELECT make, logo, y, n, total, rate::float, share::float
+          FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
+          ORDER BY total DESC
+        `;
+        data[region] = rows as CoverageSampleRow[];
+      } else {
+        data[region] = [];
+      }
     }
+    return data;
   }
 
+  // Latest-per-brand: for each region, pick the most recent row per make
   for (const region of regions) {
-    if (pinnedRegion && region === pinnedRegion && pinnedRows) {
-      data[region] = pinnedRows;
-      continue;
-    }
-
-    // Latest per brand: for each make, pick the row from the most recent snapshot
     const rows = await sql`
       SELECT DISTINCT ON (r.make)
         r.make, r.logo,
@@ -967,6 +966,22 @@ export async function getCoverageDashboardData(
   }
 
   return data;
+}
+
+/** Update snapshot metadata (region, date, notes). */
+export async function updateCoverageSampleSnapshot(
+  id: number,
+  fields: { region?: string; snapshot_date?: string; notes?: string | null }
+): Promise<void> {
+  if (fields.region !== undefined) {
+    await sql`UPDATE coverage_sample_snapshots SET region = ${fields.region} WHERE id = ${id}`;
+  }
+  if (fields.snapshot_date !== undefined) {
+    await sql`UPDATE coverage_sample_snapshots SET snapshot_date = ${fields.snapshot_date} WHERE id = ${id}`;
+  }
+  if ("notes" in fields) {
+    await sql`UPDATE coverage_sample_snapshots SET notes = ${fields.notes ?? null} WHERE id = ${id}`;
+  }
 }
 
 /** Save a new coverage sample snapshot and its rows. Returns the new snapshot id. */

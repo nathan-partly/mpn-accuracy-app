@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCoverageSampleSnapshots } from "@/lib/queries";
 import { CoverageUploadClient } from "@/components/CoverageUploadClient";
+import { SnapshotManager } from "@/components/SnapshotManager";
 
 export const metadata = {
   title: "New Coverage Snapshot | Interpreter Metrics",
@@ -8,14 +9,8 @@ export const metadata = {
 
 export const revalidate = 0;
 
-function fmtDate(iso: string) {
-  const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
 export default async function CoverageUploadPage() {
   const snapshots = await getCoverageSampleSnapshots();
-  const nonBaseline = snapshots.filter((s) => !s.is_baseline);
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-16">
@@ -73,44 +68,8 @@ export default async function CoverageUploadPage() {
         </div>
       </div>
 
-      {/* Snapshot history */}
-      {nonBaseline.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">Snapshot History</h2>
-          <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
-            <div className="h-1 bg-brand-blue" />
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-grey-100">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Date</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Region</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Brands</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Notes</th>
-                  <th className="text-right px-5 py-3 text-xs font-semibold text-grey-400 uppercase tracking-widest">Uploaded by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nonBaseline.map((s, i) => (
-                  <tr key={s.id} className={i !== nonBaseline.length - 1 ? "border-b border-grey-100" : ""}>
-                    <td className="px-5 py-3.5 font-semibold text-grey-950 whitespace-nowrap">
-                      {fmtDate(s.snapshot_date)}
-                      {i === 0 && (
-                        <span className="ml-2 text-xs font-semibold text-brand-blue bg-brand-tint px-1.5 py-0.5 rounded">Latest</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className="text-xs font-bold text-grey-700 bg-grey-100 px-2 py-0.5 rounded">{s.region}</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right text-grey-700 tabular-nums">{s.row_count ?? "—"}</td>
-                    <td className="px-5 py-3.5 text-grey-500 text-xs">{s.notes ?? <span className="text-grey-300">—</span>}</td>
-                    <td className="px-5 py-3.5 text-right text-grey-400 text-xs">{s.uploaded_by ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      {/* Snapshot history with inline edit/delete */}
+      <SnapshotManager snapshots={snapshots} />
 
       {/* Baseline note */}
       <div className="bg-grey-50 rounded-xl border border-grey-100 px-5 py-4 mb-8">
