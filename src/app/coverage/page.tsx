@@ -56,7 +56,12 @@ export default function CoveragePage() {
   const dataCache      = useRef(new Map<string, Record<string, unknown[]>>());
 
   // ── Fetch data and postMessage it to the iframe ───────────────────────────────
+  // Uses a request counter to discard stale responses — prevents the "All" data
+  // from landing after a snapshot was already selected (or vice versa).
+  const requestCounter = useRef(0);
+
   const sendData = useCallback(async (region: string, sel: SnapshotSelection) => {
+    const requestId = ++requestCounter.current;
     const cacheKey = typeof sel === "number" ? `snap:${sel}` : "combined";
 
     let data = dataCache.current.get(cacheKey);
@@ -70,6 +75,9 @@ export default function CoveragePage() {
         dataCache.current.set(cacheKey, data);
       } catch { return; }
     }
+
+    // Discard if a newer request has already been made
+    if (requestId !== requestCounter.current) return;
 
     iframeRef.current?.contentWindow?.postMessage(
       { type: "setData", data, region },
