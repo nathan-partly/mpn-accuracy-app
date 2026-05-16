@@ -893,6 +893,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const snapshotParam = searchParams.get("snapshot");
   const regionParam   = searchParams.get("r") ?? "ALL";
+  const hideTrend     = searchParams.get("hideTrend") === "1";
   const snapshotId = snapshotParam ? parseInt(snapshotParam, 10) : undefined;
 
   // 1. Get HTML template from legacy coverage_snapshots (or static file)
@@ -929,14 +930,19 @@ export async function GET(req: NextRequest) {
     // Fall through — the HTML still has its own embedded DATA
   }
 
-  // 3. Set the initial region, hide the iframe's tab strip, add postMessage listener
+  // 3. Set initial region, hide iframe tab strip, add postMessage listener
   html = injectInitialRegion(html, regionParam);
   html = html.replace("</head>", `${hideTabsStyle()}</head>`);
   html = injectPostMessageListener(html);
 
+  // 4. Trend chart: only shown for point-in-time snapshot views, not the combined "All" view
+  const processedHtml = hideTrend
+    ? injectIntegrationCounts(html)
+    : injectIntegrationCounts(injectTrendChart(html));
+
   // Cache for 60s so switching back to a recently-viewed snapshot is instant.
-  // The parent page uses postMessage for region switches (no refetch at all).
-  return new NextResponse(injectIntegrationCounts(injectTrendChart(html)), {
+  // The parent page uses postMessage for region-only switches (no refetch at all).
+  return new NextResponse(processedHtml, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
