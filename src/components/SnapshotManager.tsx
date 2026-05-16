@@ -140,7 +140,7 @@ export function SnapshotManager({ snapshots }: { snapshots: Snapshot[] }) {
   return (
     <section className="mb-8">
       <h2 className="text-sm font-bold text-grey-950 uppercase tracking-widest mb-4">Snapshot History</h2>
-      <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-grey-100 shadow-sm overflow-x-auto">
         <div className="h-1 bg-brand-blue" />
         <table className="w-full text-sm">
           <thead>
