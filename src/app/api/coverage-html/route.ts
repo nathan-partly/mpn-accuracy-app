@@ -935,10 +935,7 @@ export async function GET(req: NextRequest) {
   html = html.replace("</head>", `${hideTabsStyle()}</head>`);
   html = injectPostMessageListener(html);
 
-  // 4. Trend chart: only shown for point-in-time snapshot views, not the combined "All" view
-  const processedHtml = hideTrend
-    ? injectIntegrationCounts(html)
-    : injectIntegrationCounts(injectTrendChart(html));
+  const processedHtml = injectIntegrationCounts(html);
 
   // Cache for 60s so switching back to a recently-viewed snapshot is instant.
   // The parent page uses postMessage for region-only switches (no refetch at all).
