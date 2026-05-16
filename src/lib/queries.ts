@@ -929,19 +929,22 @@ export async function getCoverageDashboardData(
   const data: Record<string, CoverageSampleRow[]> = {};
 
   if (snapshotId) {
-    // Specific snapshot — only populate its region, leave others empty
+    // Specific snapshot — populate its region AND "ALL" with this data.
+    // Leave every other region empty so those tabs show "no data",
+    // making clear that only one region was sampled.
     const snap = await sql`
       SELECT region FROM coverage_sample_snapshots WHERE id = ${snapshotId}
     `;
     const pinnedRegion = snap[0]?.region as string | undefined;
 
+    const rows = pinnedRegion ? await sql`
+      SELECT make, logo, y, n, total, rate::float, share::float
+      FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
+      ORDER BY total DESC
+    ` : [];
+
     for (const region of regions) {
-      if (region === pinnedRegion) {
-        const rows = await sql`
-          SELECT make, logo, y, n, total, rate::float, share::float
-          FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
-          ORDER BY total DESC
-        `;
+      if (region === pinnedRegion || region === "ALL") {
         data[region] = rows as CoverageSampleRow[];
       } else {
         data[region] = [];

@@ -19,12 +19,9 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-const REGIONS = ["ALL", "UK", "NZ", "AU", "US"];
-
 export default function CoveragePage() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [activeRegionFilter, setActiveRegionFilter] = useState("ALL");
   const [iframeSrc, setIframeSrc] = useState("/api/coverage-html");
   const [loading, setLoading] = useState(true);
 
@@ -43,15 +40,11 @@ export default function CoveragePage() {
     setIframeSrc(id ? `/api/coverage-html?snapshot=${id}` : "/api/coverage-html");
   }, []);
 
-  // Filter snapshots to the selected region tab (for the picker list)
-  const regionSnapshots = snapshots.filter(
-    (s) => activeRegionFilter === "ALL" || s.region === activeRegionFilter
-  );
-
-  // Group non-baseline snapshots (uploaded snapshots) by region for summary
+  // Show non-baseline first, then baseline — each pill shows its region label
   const nonBaseline = snapshots.filter((s) => !s.is_baseline);
+  const baseline = snapshots.filter((s) => s.is_baseline && s.region !== "ALL");
+  const pillSnapshots = [...nonBaseline, ...baseline];
 
-  // The currently selected snapshot metadata
   const selectedSnap = selectedId ? snapshots.find((s) => s.id === selectedId) : null;
 
   return (
@@ -85,26 +78,7 @@ export default function CoveragePage() {
       </div>
 
       {/* ── Snapshot selector bar ── */}
-      <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-4 flex-shrink-0 overflow-x-auto">
-        {/* Region filter tabs */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {REGIONS.map((r) => (
-            <button
-              key={r}
-              onClick={() => setActiveRegionFilter(r)}
-              className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-                activeRegionFilter === r
-                  ? "bg-brand-blue text-white"
-                  : "text-grey-500 hover:text-grey-900 hover:bg-grey-100"
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-
-        <div className="w-px h-4 bg-grey-200 flex-shrink-0" />
-
+      <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto">
         {/* "Latest" pill — always first */}
         <button
           onClick={() => handleSelect(null)}
@@ -120,11 +94,13 @@ export default function CoveragePage() {
           Latest (all brands)
         </button>
 
-        {/* Snapshot pills */}
+        <div className="w-px h-4 bg-grey-200 flex-shrink-0" />
+
+        {/* Snapshot pills — non-baseline then baseline */}
         {loading ? (
-          <span className="text-xs text-grey-400 italic">Loading snapshots…</span>
+          <span className="text-xs text-grey-400 italic">Loading…</span>
         ) : (
-          regionSnapshots.map((snap) => {
+          pillSnapshots.map((snap) => {
             const isSelected = selectedId === snap.id;
             return (
               <button
@@ -142,16 +118,19 @@ export default function CoveragePage() {
                 {!snap.is_baseline && (
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isSelected ? "bg-white" : "bg-brand-blue"}`} />
                 )}
-                <span className={snap.is_baseline ? "text-grey-400" : ""}>
-                  {fmtDate(snap.snapshot_date)}
+                <span>{fmtDate(snap.snapshot_date)}</span>
+                {/* Always show region on the pill */}
+                <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${
+                  isSelected
+                    ? "bg-blue-500 text-white"
+                    : snap.is_baseline
+                    ? "bg-grey-100 text-grey-400"
+                    : "bg-blue-50 text-brand-blue"
+                }`}>
+                  {snap.region}
                 </span>
-                {snap.region !== "ALL" && snap.region !== activeRegionFilter && (
-                  <span className={`text-[10px] font-bold ${isSelected ? "text-blue-200" : "text-grey-400"}`}>
-                    {snap.region}
-                  </span>
-                )}
                 {snap.is_baseline && (
-                  <span className={`text-[10px] font-bold ${isSelected ? "text-blue-200" : "text-grey-400"}`}>
+                  <span className={`text-[10px] ${isSelected ? "text-blue-200" : "text-grey-400"}`}>
                     baseline
                   </span>
                 )}
@@ -166,16 +145,19 @@ export default function CoveragePage() {
         )}
 
         {/* Context label for selected snapshot */}
-        {selectedSnap && !selectedSnap.is_baseline && (
+        {selectedSnap && (
           <span className="ml-auto flex-shrink-0 text-xs text-grey-500 whitespace-nowrap">
-            Viewing {selectedSnap.region} · {fmtDate(selectedSnap.snapshot_date)}
-            {selectedSnap.notes && <> · <em>{selectedSnap.notes}</em></>}
-            {" — other regions show latest"}
+            {selectedSnap.is_baseline
+              ? `Baseline · ${selectedSnap.region} · ${fmtDate(selectedSnap.snapshot_date)}`
+              : `${selectedSnap.region} snapshot · ${fmtDate(selectedSnap.snapshot_date)}${selectedSnap.notes ? ` · ${selectedSnap.notes}` : ""}`
+            }
           </span>
         )}
 
         {nonBaseline.length === 0 && !loading && (
-          <span className="ml-2 text-xs text-grey-400 italic">No uploaded snapshots yet — upload a CSV to track progress over time</span>
+          <span className="ml-2 text-xs text-grey-400 italic">
+            Upload a CSV to track progress over time
+          </span>
         )}
       </div>
 
