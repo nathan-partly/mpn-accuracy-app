@@ -856,10 +856,27 @@ function injectDataIntoHtml(html: string, data: Record<string, unknown[]>): stri
   return html.slice(0, markerIdx) + `const DATA = ${JSON.stringify(data)}` + html.slice(i + 1);
 }
 
+// ── Hide the iframe's own region tabs (region control lives in the Next.js page) ──
+function hideTabsStyle(): string {
+  return `<style>.tabs{display:none!important}</style>`;
+}
+
+// ── Inject initial region so the iframe auto-selects the right region on load ──
+function injectInitialRegion(html: string, region: string): string {
+  const VALID = ["ALL", "UK", "US", "NZ", "AU"];
+  const safe = VALID.includes(region) ? region : "ALL";
+  // Replace the initial region variable declaration
+  return html.replace(
+    /let region\s*=\s*['"][^'"]*['"]/,
+    `let region='${safe}'`
+  );
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const snapshotParam = searchParams.get("snapshot");
+  const regionParam   = searchParams.get("r") ?? "ALL";
   const snapshotId = snapshotParam ? parseInt(snapshotParam, 10) : undefined;
 
   // 1. Get HTML template from legacy coverage_snapshots (or static file)
@@ -895,6 +912,10 @@ export async function GET(req: NextRequest) {
     console.error("[coverage-html] Failed to load dynamic data, using embedded DATA:", err);
     // Fall through — the HTML still has its own embedded DATA
   }
+
+  // 3. Set the initial region and hide the iframe's own tab strip
+  html = injectInitialRegion(html, regionParam);
+  html = html.replace("</head>", `${hideTabsStyle()}</head>`);
 
   return new NextResponse(injectIntegrationCounts(injectTrendChart(html)), {
     headers: {
