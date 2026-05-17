@@ -808,29 +808,11 @@ function brandsCoveredStatHtml(): string {
 </style>
 <script>
 (function () {
-  function hookRenderHero() {
-    if (typeof renderHero === 'undefined') { setTimeout(hookRenderHero, 80); return; }
-    var _orig = renderHero;
-    renderHero = function (brands) {
-      _orig(brands);
-      injectKpiCard(brands);
-    };
-    /* trigger immediately if data already rendered */
-    var currentRegion = (typeof window.region !== 'undefined' ? window.region : null) || 'ALL';
-    if (typeof DATA !== 'undefined' && DATA[currentRegion]) {
-      injectKpiCard(DATA[currentRegion]);
-    }
-  }
-
   function injectKpiCard(brands) {
     var kpisEl = document.getElementById('kpis');
     if (!kpisEl) return;
-
-    /* count ALL brands with at least 1 covered VIN — unaffected by the minN filter */
     var withCoverage = brands.filter(function (b) { return b.y > 0; }).length;
     var totalBrands  = brands.length;
-
-    /* re-use or create the card element */
     var card = document.getElementById('kpi-brands-covered');
     if (!card) {
       card = document.createElement('div');
@@ -848,7 +830,20 @@ function brandsCoveredStatHtml(): string {
       + '</div>';
   }
 
-  hookRenderHero();
+  /* Hook renderAll (not renderHero) so the card is appended AFTER renderKPIs
+     has replaced #kpis innerHTML — otherwise renderKPIs wipes the card out. */
+  function hookRenderAll() {
+    if (typeof renderAll === 'undefined') { setTimeout(hookRenderAll, 80); return; }
+    var _orig = renderAll;
+    renderAll = function () {
+      _orig();
+      injectKpiCard(DATA[region] || []);
+    };
+    /* fire once immediately for the initial render */
+    injectKpiCard(DATA[region] || []);
+  }
+
+  hookRenderAll();
 })();
 <\/script>`;
 }
