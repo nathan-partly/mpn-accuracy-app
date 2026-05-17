@@ -237,6 +237,68 @@ export async function GET(req: Request): Promise<NextResponse> {
     // Non-fatal: fall back to sequential scan values already loaded above
   }
 
+  // ── 2c. Fallback: fill missing brands from sample snapshot coverage ──────────────
+  // Some brands (e.g. Opel) may exist in sample snapshots but not in the VIN snapshot.
+  // Without a fallback, target-type gains treat current coverage as 0%, inflating the gain.
+  try {
+    const missingBrands = new Set<string>();
+    for (const integ of integrations) {
+      for (const b of (integ.brands ?? [])) {
+        const key = b.toUpperCase();
+        if (!brandCoverage[key]) missingBrands.add(key);
+      }
+    }
+
+    if (missingBrands.size > 0) {
+      const latestSampleSnaps = await sql`
+        SELECT DISTINCT ON (region) id, region
+        FROM coverage_sample_snapshots
+        WHERE is_baseline = false
+        ORDER BY region, snapshot_date DESC, created_at DESC
+      ` as Array<{ id: number; region: string }>;
+
+      if (latestSampleSnaps.length > 0) {
+        const snapIds = latestSampleSnaps.map((s) => s.id);
+        const regionToSnap: Record<string, number> = {};
+        for (const s of latestSampleSnaps) regionToSnap[s.region.toUpperCase()] = s.id;
+
+        if (market === "all") {
+          const sampleRows = await sql`
+            SELECT UPPER(make) AS make, SUM(y)::int AS covered, SUM(total)::int AS total
+            FROM coverage_sample_rows
+            WHERE snapshot_id = ANY(${snapIds})
+            GROUP BY UPPER(make)
+          ` as Array<{ make: string; covered: number; total: number }>;
+
+          for (const row of sampleRows) {
+            if (!missingBrands.has(row.make)) continue;
+            const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+            const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+            if (t > 0) brandCoverage[row.make] = { today: (c / t) * 100, totalVins: t, marketCount: 1 };
+          }
+        } else {
+          const regionUpper = regionKey(market);
+          const snapId = regionToSnap[regionUpper];
+          if (snapId) {
+            const sampleRows = await sql`
+              SELECT UPPER(make) AS make, y::int AS covered, total::int AS total
+              FROM coverage_sample_rows WHERE snapshot_id = ${snapId}
+            ` as Array<{ make: string; covered: number; total: number }>;
+
+            for (const row of sampleRows) {
+              if (!missingBrands.has(row.make)) continue;
+              const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+              const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+              if (t > 0) brandCoverage[row.make] = { today: (c / t) * 100, totalVins: t, marketCount: 1 };
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[coverage-roadmap] sample snapshot fallback failed:", e);
+  }
+
   // ── 3. Collect all brands that appear in any integration ─────────────────────
   // Only show brands that are part of at least one integration (live or upcoming)
   const integrationBrands: Record<string, true> = {};
