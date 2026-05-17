@@ -53,6 +53,9 @@ interface DataIntegration {
   annual_cost: number | null;
   cost_per_vin: number | null;
   integration_date: string | null;
+  /** Auto-computed from sample snapshot brand shares (server-side only, not in form) */
+  computed_total_vio_pct?: number | null;
+  computed_incremental_vio_pct?: number | null;
 }
 
 type SortKey = "name" | "integration_date" | "total_vio_pct" | "incremental_vio_pct";
@@ -778,37 +781,31 @@ export default function DataIntegrationsPage() {
                       <td className="px-3 py-1.5">
                         <AvailabilityBadge value={row.data_availability} />
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono text-grey-700">
-                        {row.total_vio_pct != null ? `${row.total_vio_pct.toFixed(1)}%` : <span className="text-grey-300">—</span>}
+                      {/* Total VIO % — manual value, or computed ~estimate */}
+                      <td className="px-3 py-1.5 text-right font-mono">
+                        {row.total_vio_pct != null ? (
+                          <span className="text-grey-700">{row.total_vio_pct.toFixed(1)}%</span>
+                        ) : row.computed_total_vio_pct != null ? (
+                          <span className="text-grey-400" title="Auto-estimated from sample snapshot brand shares">
+                            ~{row.computed_total_vio_pct.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="text-grey-300">—</span>
+                        )}
                       </td>
+                      {/* Incremental — manual value, or computed ~estimate */}
                       <td className="px-3 py-1.5 text-right">
-                        <span className={`font-mono font-semibold ${row.incremental_vio_pct != null ? "text-brand-blue" : "text-grey-300"}`}>
-                          {row.incremental_vio_pct != null ? `+${row.incremental_vio_pct.toFixed(1)}%` : "—"}
-                        </span>
-                        {(() => {
-                          const markets = (
-                            [
-                              { key: "nz" as const, label: "NZ", val: row.incremental_nz_pct },
-                              { key: "uk" as const, label: "UK", val: row.incremental_uk_pct },
-                              { key: "au" as const, label: "AU", val: row.incremental_au_pct },
-                              { key: "us" as const, label: "US", val: row.incremental_us_pct },
-                            ] as const
-                          ).filter((m) => m.val != null);
-                          if (markets.length === 0) return null;
-                          return (
-                            <div className="flex flex-wrap gap-0.5 justify-end mt-0.5">
-                              {markets.map((m) => (
-                                <span
-                                  key={m.key}
-                                  className="inline-flex items-center gap-px px-1 py-px rounded text-[9px] font-semibold bg-blue-50 text-blue-600 tabular-nums whitespace-nowrap"
-                                >
-                                  <span className="text-blue-400">{m.label}</span>
-                                  <span>+{m.val!.toFixed(1)}%</span>
-                                </span>
-                              ))}
-                            </div>
-                          );
-                        })()}
+                        {row.incremental_vio_pct != null ? (
+                          <span className="font-mono font-semibold text-brand-blue">
+                            +{row.incremental_vio_pct.toFixed(1)}%
+                          </span>
+                        ) : row.computed_incremental_vio_pct != null ? (
+                          <span className="font-mono font-semibold text-grey-400" title="Auto-estimated from per-brand coverage impact data">
+                            ~{row.computed_incremental_vio_pct.toFixed(1)}%
+                          </span>
+                        ) : (
+                          <span className="font-mono text-grey-300">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-1.5 text-right">
                         {(row.annual_cost != null || row.cost_per_vin != null) ? (
