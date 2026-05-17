@@ -946,11 +946,11 @@ export async function getCoverageDashboardData(
           REGEXP_REPLACE(UPPER(input_make), '[^A-Z0-9]', '', 'g') AS make_key,
           UPPER(input_region) AS region_key,
           COALESCE(
-            array_agg(vin ORDER BY vin) FILTER (WHERE gcs_found = true),
+            array_agg(DISTINCT vin ORDER BY vin) FILTER (WHERE gcs_found = true),
             ARRAY[]::text[]
           ) AS yv,
           COALESCE(
-            array_agg(vin ORDER BY vin) FILTER (WHERE gcs_found = false),
+            array_agg(DISTINCT vin ORDER BY vin) FILTER (WHERE gcs_found = false),
             ARRAY[]::text[]
           ) AS nv
         FROM coverage_vin_data
