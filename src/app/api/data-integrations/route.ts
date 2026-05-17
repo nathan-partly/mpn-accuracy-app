@@ -129,9 +129,9 @@ export async function GET() {
       if (latestSnaps.length > 0) {
         const snapIds = latestSnaps.map((s) => s.id);
 
-        // Step B: sum brand totals + covered across those snapshot ids
+        // Step B: sum brand totals + covered (y) across those snapshot ids
         const brandRows = await sql`
-          SELECT UPPER(make) AS make, SUM(total)::int AS total, SUM(covered)::int AS covered
+          SELECT UPPER(make) AS make, SUM(total)::int AS total, SUM(y)::int AS covered
           FROM coverage_sample_rows
           WHERE snapshot_id = ANY(${snapIds})
           GROUP BY UPPER(make)
