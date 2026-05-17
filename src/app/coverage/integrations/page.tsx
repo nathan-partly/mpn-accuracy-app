@@ -56,6 +56,10 @@ interface DataIntegration {
   /** Auto-computed from sample snapshot brand shares (server-side only, not in form) */
   computed_total_vio_pct?: number | null;
   computed_incremental_vio_pct?: number | null;
+  computed_incremental_nz_pct?: number | null;
+  computed_incremental_uk_pct?: number | null;
+  computed_incremental_au_pct?: number | null;
+  computed_incremental_us_pct?: number | null;
 }
 
 type SortKey = "name" | "integration_date" | "total_vio_pct" | "incremental_vio_pct";
@@ -756,7 +760,12 @@ export default function DataIntegrationsPage() {
                     <th className="text-left px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider">Brands</th>
                     <th className="px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider text-left">Availability</th>
                     <SortTh label="Total VIO %" col="total_vio_pct" sort={sort} onSort={handleSort} right />
-                    <SortTh label="Incremental" col="incremental_vio_pct" sort={sort} onSort={handleSort} right />
+                    <th className="px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider">
+                      <div className="grid grid-cols-2 gap-x-3 text-right">
+                        <span>NZ</span><span>UK</span>
+                        <span>AU</span><span>US</span>
+                      </div>
+                    </th>
                     <th className="px-3 py-2 text-[10px] font-semibold text-grey-500 uppercase tracking-wider text-right">Cost</th>
                     <SortTh label="Date" col="integration_date" sort={sort} onSort={handleSort} />
                     <th className="px-2 py-2" />
@@ -802,22 +811,55 @@ export default function DataIntegrationsPage() {
                           <span className="text-grey-300">—</span>
                         )}
                       </td>
-                      {/* Incremental — manual value preferred; auto-estimate as fallback */}
-                      <td className="px-3 py-1.5 text-right">
-                        {row.incremental_vio_pct != null ? (
-                          <span
-                            className="font-mono font-semibold text-brand-blue"
-                            title={row.computed_incremental_vio_pct != null ? `Sample estimate: ~${row.computed_incremental_vio_pct.toFixed(1)}%` : undefined}
-                          >
-                            +{row.incremental_vio_pct.toFixed(1)}%
-                          </span>
-                        ) : row.computed_incremental_vio_pct != null ? (
-                          <span className="font-mono font-semibold text-grey-400" title="Auto-estimated from per-brand coverage impact data — add per-brand values in Edit to improve accuracy">
-                            ~{row.computed_incremental_vio_pct.toFixed(1)}%
-                          </span>
-                        ) : (
-                          <span className="font-mono text-grey-300">—</span>
-                        )}
+                      {/* Incremental — per-market breakdown (NZ/UK/AU/US) */}
+                      <td className="px-3 py-1.5">
+                        {(() => {
+                          const mkts = [
+                            { label: "NZ", manual: row.incremental_nz_pct, computed: row.computed_incremental_nz_pct },
+                            { label: "UK", manual: row.incremental_uk_pct, computed: row.computed_incremental_uk_pct },
+                            { label: "AU", manual: row.incremental_au_pct, computed: row.computed_incremental_au_pct },
+                            { label: "US", manual: row.incremental_us_pct, computed: row.computed_incremental_us_pct },
+                          ];
+                          const hasAny = mkts.some((m) => m.manual != null || m.computed != null);
+                          if (!hasAny) {
+                            // Fall back to global value if no per-market data at all
+                            if (row.incremental_vio_pct != null) return (
+                              <span className="font-mono font-semibold text-brand-blue">
+                                +{row.incremental_vio_pct.toFixed(1)}%
+                              </span>
+                            );
+                            if (row.computed_incremental_vio_pct != null) return (
+                              <span className="font-mono font-semibold text-grey-400" title="Auto-estimated">
+                                ~{row.computed_incremental_vio_pct.toFixed(1)}%
+                              </span>
+                            );
+                            return <span className="font-mono text-grey-300">—</span>;
+                          }
+                          // 2×2 grid: NZ UK / AU US
+                          return (
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-right">
+                              {mkts.map(({ label, manual, computed }) => {
+                                const val = manual ?? computed;
+                                const isManual = manual != null;
+                                return (
+                                  <div key={label} className="flex items-center justify-end gap-1">
+                                    <span className="text-[9px] font-bold text-grey-400 uppercase tracking-wide">{label}</span>
+                                    {val != null ? (
+                                      <span
+                                        className={`font-mono text-xs font-semibold tabular-nums ${isManual ? "text-brand-blue" : "text-grey-500"}`}
+                                        title={isManual ? undefined : "Auto-estimated"}
+                                      >
+                                        {isManual ? "+" : "~"}{val.toFixed(1)}%
+                                      </span>
+                                    ) : (
+                                      <span className="font-mono text-xs text-grey-300">—</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-1.5 text-right">
                         {(row.annual_cost != null || row.cost_per_vin != null) ? (

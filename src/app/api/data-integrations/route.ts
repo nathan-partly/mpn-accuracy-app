@@ -49,6 +49,11 @@ export interface DataIntegration {
   computed_total_vio_pct: number | null;
   /** Auto-computed from brand_incremental × brand share when incremental_vio_pct is null */
   computed_incremental_vio_pct: number | null;
+  /** Auto-computed per-market incremental from brand_incremental data */
+  computed_incremental_nz_pct: number | null;
+  computed_incremental_uk_pct: number | null;
+  computed_incremental_au_pct: number | null;
+  computed_incremental_us_pct: number | null;
 }
 
 function n(v: unknown): number | null {
@@ -188,13 +193,27 @@ export async function GET() {
 
       // computed_incremental_vio_pct: Σ(brand_share × avg_market_gain%)
       // Handles both fixed gains and target-coverage gains (target − current coverage).
+      // Also computes per-market breakdown (nz/uk/au/us).
       if (integ.brand_incremental && brandShareMap.size > 0) {
+        // Global (average across markets)
         let weightedGainSum = 0;
         let anyGain = false;
+        // Per-market accumulators
+        const mktSum: Record<"nz"|"uk"|"au"|"us", number> = { nz: 0, uk: 0, au: 0, us: 0 };
+        const mktAny: Record<"nz"|"uk"|"au"|"us", boolean> = { nz: false, uk: false, au: false, us: false };
+
         for (const [brand, markets] of Object.entries(integ.brand_incremental)) {
           const share      = getShare(brand) / 100; // fraction of total VIN universe
           if (share <= 0) continue;
           const currentCov = getCoverage(brand); // current coverage rate for this brand (%)
+
+          // Per-market gains
+          for (const m of (["nz", "uk", "au", "us"] as const)) {
+            const g = resolveMarketGain(markets[m], currentCov);
+            if (g != null) { mktSum[m] += share * g; mktAny[m] = true; }
+          }
+
+          // Global average (only over markets where this brand has a value)
           const gains = (["nz", "uk", "au", "us"] as const)
             .map((m) => resolveMarketGain(markets[m], currentCov))
             .filter((v): v is number => v != null);
@@ -203,9 +222,18 @@ export async function GET() {
           weightedGainSum += share * avgGain;
           anyGain = true;
         }
+
         integ.computed_incremental_vio_pct = anyGain ? parseFloat(weightedGainSum.toFixed(2)) : null;
+        integ.computed_incremental_nz_pct  = mktAny.nz ? parseFloat(mktSum.nz.toFixed(2)) : null;
+        integ.computed_incremental_uk_pct  = mktAny.uk ? parseFloat(mktSum.uk.toFixed(2)) : null;
+        integ.computed_incremental_au_pct  = mktAny.au ? parseFloat(mktSum.au.toFixed(2)) : null;
+        integ.computed_incremental_us_pct  = mktAny.us ? parseFloat(mktSum.us.toFixed(2)) : null;
       } else {
         integ.computed_incremental_vio_pct = null;
+        integ.computed_incremental_nz_pct  = null;
+        integ.computed_incremental_uk_pct  = null;
+        integ.computed_incremental_au_pct  = null;
+        integ.computed_incremental_us_pct  = null;
       }
     }
 
