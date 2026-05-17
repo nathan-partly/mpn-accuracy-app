@@ -4,7 +4,10 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { CoverageRoadmapChart } from "@/components/CoverageRoadmapChart";
 
-type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
+/** Stored in DB JSONB — new format with explicit type discriminant.
+ *  For backward compat, the DB may also contain plain numbers (treated as "fixed"). */
+type MarketDBValue = { type: "fixed" | "target"; value: number } | null;
+type BrandIncrementalMap = Record<string, { nz: MarketDBValue; uk: MarketDBValue; au: MarketDBValue; us: MarketDBValue }>;
 type DataAvailability = "integrated" | "available" | "high_confidence" | "low_confidence" | null;
 
 const AVAILABILITY_OPTIONS: { value: DataAvailability; label: string; shortLabel: string; color: string; bg: string }[] = [
@@ -38,6 +41,7 @@ interface DataIntegration {
   type: "online" | "offline";
   relationship: "direct" | "third-party";
   brands: string[];
+  /** Legacy fields — kept for API compat but not shown in the form */
   total_vio_pct: number | null;
   incremental_vio_pct: number | null;
   incremental_nz_pct: number | null;
@@ -73,8 +77,30 @@ const EMPTY_FORM: Omit<DataIntegration, "id"> = {
   integration_date: null,
 };
 
-// Per-brand incremental state: string values so inputs work cleanly
-type BrandIncrementalForm = Record<string, { nz: string; uk: string; au: string; us: string }>;
+// Per-brand form state — each market cell has a mode + raw string value
+type MarketMode = "fixed" | "target";
+type MarketCell = { mode: MarketMode; value: string };
+type BrandIncrementalForm = Record<string, { nz: MarketCell; uk: MarketCell; au: MarketCell; us: MarketCell }>;
+
+const defaultCell = (): MarketCell => ({ mode: "fixed", value: "" });
+
+/** Convert a raw DB value (number or new object) to a form cell */
+function readMarketCell(v: unknown): MarketCell {
+  if (v == null) return defaultCell();
+  if (typeof v === "number") return { mode: "fixed", value: String(v) };
+  if (typeof v === "object" && "type" in v && "value" in v) {
+    const o = v as { type: string; value: number };
+    return { mode: o.type === "target" ? "target" : "fixed", value: String(o.value) };
+  }
+  return defaultCell();
+}
+
+/** Convert a form cell to the DB format for saving */
+function cellToDBValue(cell: MarketCell): MarketDBValue {
+  const num = cell.value === "" ? NaN : parseFloat(cell.value);
+  if (isNaN(num)) return null;
+  return { type: cell.mode, value: num };
+}
 
 function todayISO() {
   return new Date().toISOString().split("T")[0];
@@ -273,16 +299,16 @@ export default function DataIntegrationsPage() {
       cost_per_vin: row.cost_per_vin ?? null,
       integration_date: row.integration_date ?? null,
     });
-    // Populate per-brand form state from saved data
+    // Populate per-brand form state from saved data (handles both old number and new {type,value} formats)
     const bi: BrandIncrementalForm = {};
     if (row.brand_incremental) {
       for (const brand of Object.keys(row.brand_incremental)) {
         const v = row.brand_incremental[brand];
         bi[brand] = {
-          nz: v.nz != null ? String(v.nz) : "",
-          uk: v.uk != null ? String(v.uk) : "",
-          au: v.au != null ? String(v.au) : "",
-          us: v.us != null ? String(v.us) : "",
+          nz: readMarketCell(v.nz),
+          uk: readMarketCell(v.uk),
+          au: readMarketCell(v.au),
+          us: readMarketCell(v.us),
         };
       }
     }
@@ -295,20 +321,27 @@ export default function DataIntegrationsPage() {
     if (!form.name.trim()) { setFormError("Integration name is required."); return; }
     setSaving(true); setFormError(null);
     const brandsArr = brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
-    // Convert per-brand string values to numbers for the payload
+    // Convert per-brand form cells to the new {type, value} DB format
     const brandIncrementalPayload: BrandIncrementalMap = {};
     for (const brand of Object.keys(brandIncremental)) {
       const v = brandIncremental[brand];
-      const nz = v.nz !== "" ? parseFloat(v.nz) : null;
-      const uk = v.uk !== "" ? parseFloat(v.uk) : null;
-      const au = v.au !== "" ? parseFloat(v.au) : null;
-      const us = v.us !== "" ? parseFloat(v.us) : null;
+      const nz = cellToDBValue(v.nz);
+      const uk = cellToDBValue(v.uk);
+      const au = cellToDBValue(v.au);
+      const us = cellToDBValue(v.us);
       if (nz != null || uk != null || au != null || us != null) {
         brandIncrementalPayload[brand] = { nz, uk, au, us };
       }
     }
     const payload = {
       ...form,
+      // Clear legacy global/market VIO fields — coverage is now all per-brand per-market
+      total_vio_pct: null,
+      incremental_vio_pct: null,
+      incremental_nz_pct: null,
+      incremental_uk_pct: null,
+      incremental_au_pct: null,
+      incremental_us_pct: null,
       brands: brandsArr,
       brand_incremental: Object.keys(brandIncrementalPayload).length > 0 ? brandIncrementalPayload : null,
     };
@@ -432,6 +465,7 @@ export default function DataIntegrationsPage() {
           <div ref={formRef} className="bg-white border border-brand-blue rounded-xl p-6 mb-6 shadow-sm">
             <h2 className="text-sm font-bold text-grey-950 mb-4">{editId ? "Edit Integration" : "Add Integration"}</h2>
             <div className="grid grid-cols-2 gap-4">
+              {/* Row 1: Name + Type */}
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Integration Name *</label>
                 <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Toyota OEM Direct" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
@@ -443,6 +477,8 @@ export default function DataIntegrationsPage() {
                   <option value="offline">Offline</option>
                 </select>
               </div>
+
+              {/* Row 2: Relationship + Date */}
               <div>
                 <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Relationship *</label>
                 <select value={form.relationship} onChange={(e) => setForm((f) => ({ ...f, relationship: e.target.value as "direct" | "third-party" }))} className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue bg-white">
@@ -460,21 +496,14 @@ export default function DataIntegrationsPage() {
                   <p className="text-xs text-amber-600 mt-1">Future date — will show as a projected target</p>
                 )}
               </div>
+
+              {/* Row 3: Brands */}
               <div className="col-span-2">
                 <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Brands (comma-separated)</label>
                 <input type="text" value={brandsInput} onChange={(e) => setBrandsInput(e.target.value)} placeholder="e.g. TOYOTA, LEXUS, DAIHATSU" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Total Global VIO %</label>
-                <input type="number" min={0} max={100} step={0.1} value={form.total_vio_pct ?? ""} onChange={(e) => setForm((f) => ({ ...f, total_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))} placeholder="e.g. 12.5" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
-                <p className="text-xs text-grey-400 mt-1">Total VIO % this integration covers</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Incremental Global VIO %</label>
-                <input type="number" min={0} max={100} step={0.1} value={form.incremental_vio_pct ?? ""} onChange={(e) => setForm((f) => ({ ...f, incremental_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))} placeholder="e.g. 8.3" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
-                <p className="text-xs text-grey-400 mt-1">New VIO % added on top of existing coverage</p>
-              </div>
-              {/* Data availability + cost */}
+
+              {/* Row 4: Data Availability + Cost */}
               <div className="col-span-2 grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Data Availability</label>
@@ -510,86 +539,102 @@ export default function DataIntegrationsPage() {
                 </div>
               </div>
 
-              {/* Market-specific incremental fields */}
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
-                  Incremental by Market %{" "}
-                  <span className="normal-case font-normal text-grey-400">— optional market-level overrides</span>
-                </label>
-                <div className="grid grid-cols-4 gap-3">
-                  {(["nz", "uk", "au", "us"] as const).map((m) => (
-                    <div key={m}>
-                      <label className="block text-xs font-semibold text-grey-400 uppercase tracking-wider mb-1">{m}</label>
-                      <input
-                        type="number" min={0} max={100} step={0.1}
-                        value={form[`incremental_${m}_pct` as keyof typeof form] as number ?? ""}
-                        onChange={(e) => setForm((f) => ({ ...f, [`incremental_${m}_pct`]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
-                        placeholder="e.g. 5.0"
-                        className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue tabular-nums"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-grey-400 mt-1">
-                  Leave blank to fall back to the global incremental ÷ market count for roadmap projections.
-                </p>
-              </div>
-              {/* Per-brand incremental coverage by market */}
+              {/* Per-brand coverage impact by market */}
               {(() => {
                 const parsedBrands = brandsInput.split(",").map((b) => b.trim().toUpperCase()).filter(Boolean);
                 if (parsedBrands.length === 0) return null;
+
+                function updateCell(brand: string, market: "nz" | "uk" | "au" | "us", patch: Partial<MarketCell>) {
+                  setBrandIncremental((prev) => {
+                    const existing = prev[brand] ?? { nz: defaultCell(), uk: defaultCell(), au: defaultCell(), us: defaultCell() };
+                    return { ...prev, [brand]: { ...existing, [market]: { ...existing[market], ...patch } } };
+                  });
+                }
+
                 return (
                   <div className="col-span-2">
-                    <p className="text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
-                      Per-brand Incremental Coverage %{" "}
-                      <span className="normal-case font-normal text-grey-400">
-                        — % of <em>that brand&apos;s own VINs</em> newly covered (not % of global VIO)
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <p className="text-xs font-semibold text-grey-500 uppercase tracking-wider">
+                        Coverage Impact by Brand &amp; Market
+                      </p>
+                      <span className="text-[10px] text-grey-400 normal-case">— % of that brand&apos;s own VINs</span>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 mb-2 text-[10px] text-grey-500">
+                      <span className="flex items-center gap-1">
+                        <span className="inline-flex items-center justify-center w-5 h-4 rounded bg-brand-blue text-white font-bold text-[9px]">+</span>
+                        Fixed gain — adds this % to current coverage
                       </span>
-                    </p>
+                      <span className="flex items-center gap-1">
+                        <span className="inline-flex items-center justify-center w-5 h-4 rounded bg-emerald-500 text-white font-bold text-[9px]">→</span>
+                        Target — brings coverage up to this % (gain = target − current)
+                      </span>
+                    </div>
+
                     <div className="border border-grey-200 rounded-lg overflow-hidden">
-                      <div className="max-h-56 overflow-y-auto">
+                      <div className="max-h-72 overflow-y-auto">
                         <table className="w-full text-xs">
                           <thead className="sticky top-0 bg-grey-50 border-b border-grey-200 z-10">
                             <tr>
                               <th className="text-left px-3 py-2 font-semibold text-grey-500 uppercase tracking-wider w-32">Brand</th>
                               {(["NZ", "UK", "AU", "US"] as const).map((m) => (
-                                <th key={m} className="text-center px-2 py-2 font-semibold text-grey-500 uppercase tracking-wider">{m} %</th>
+                                <th key={m} className="text-center px-3 py-2 font-semibold text-grey-500 uppercase tracking-wider">{m}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {parsedBrands.map((brand, idx) => (
                               <tr key={brand} className={idx % 2 === 0 ? "bg-white" : "bg-grey-50/50"}>
-                                <td className="px-3 py-1.5 font-semibold text-grey-700 text-xs">{brand}</td>
-                                {(["nz", "uk", "au", "us"] as const).map((m) => (
-                                  <td key={m} className="px-2 py-1.5">
-                                    <input
-                                      type="number" min={0} max={100} step={0.1}
-                                      value={brandIncremental[brand]?.[m] ?? ""}
-                                      onChange={(e) => setBrandIncremental((prev) => ({
-                                        ...prev,
-                                        [brand]: {
-                                          nz: prev[brand]?.nz ?? "",
-                                          uk: prev[brand]?.uk ?? "",
-                                          au: prev[brand]?.au ?? "",
-                                          us: prev[brand]?.us ?? "",
-                                          [m]: e.target.value,
-                                        },
-                                      }))}
-                                      placeholder="—"
-                                      className="w-full px-2 py-1 border border-grey-200 rounded text-xs text-grey-950 focus:outline-none focus:border-brand-blue text-center tabular-nums"
-                                    />
-                                  </td>
-                                ))}
+                                <td className="px-3 py-2 font-semibold text-grey-700 text-xs">{brand}</td>
+                                {(["nz", "uk", "au", "us"] as const).map((m) => {
+                                  const cell = brandIncremental[brand]?.[m] ?? defaultCell();
+                                  const hasValue = cell.value !== "";
+                                  return (
+                                    <td key={m} className="px-2 py-1.5">
+                                      <div className="flex items-center gap-1.5">
+                                        {/* Mode toggle — always shown so user can preselect mode before typing */}
+                                        <div className="flex rounded overflow-hidden border border-grey-200 flex-shrink-0 text-[9px] font-bold">
+                                          <button
+                                            type="button"
+                                            onClick={() => updateCell(brand, m, { mode: "fixed" })}
+                                            className={`px-1.5 py-1 transition-colors ${cell.mode === "fixed" && hasValue ? "bg-brand-blue text-white" : "bg-white text-grey-300 hover:text-grey-500"}`}
+                                            title="Fixed gain (+X%)"
+                                          >+</button>
+                                          <button
+                                            type="button"
+                                            onClick={() => updateCell(brand, m, { mode: "target" })}
+                                            className={`px-1.5 py-1 border-l border-grey-200 transition-colors ${cell.mode === "target" && hasValue ? "bg-emerald-500 text-white" : "bg-white text-grey-300 hover:text-grey-500"}`}
+                                            title="Target coverage (→ X%)"
+                                          >→</button>
+                                        </div>
+                                        <div className="relative flex-1">
+                                          <input
+                                            type="number" min={0} max={100} step={0.1}
+                                            value={cell.value}
+                                            onChange={(e) => {
+                                              updateCell(brand, m, { value: e.target.value });
+                                            }}
+                                            placeholder="—"
+                                            className="w-full px-2 py-1 pr-5 border border-grey-200 rounded text-xs text-grey-950 focus:outline-none focus:border-brand-blue text-right tabular-nums"
+                                          />
+                                          {hasValue && (
+                                            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-grey-400 pointer-events-none">%</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  );
+                                })}
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
                     </div>
-                    <p className="text-xs text-grey-400 mt-1">
-                      e.g. FIAT NZ=65 means &ldquo;this integration will cover 65% of NZ Fiat VINs that aren&apos;t covered today.&rdquo;
-                      These values drive the roadmap chart bars. Leave blank to fall back to global VIO % ÷ brand count (less accurate).
+                    <p className="text-xs text-grey-400 mt-1.5">
+                      Example: FIAT NZ <span className="font-semibold text-brand-blue">+15%</span> = add 15 percentage points of NZ Fiat VINs.
+                      FIAT NZ <span className="font-semibold text-emerald-600">→ 98%</span> = bring NZ Fiat to 98% coverage (gain varies by current level).
                     </p>
                   </div>
                 );

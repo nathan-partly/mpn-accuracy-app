@@ -38,7 +38,22 @@ export interface RoadmapResponse {
   undatedKey: string | null;
 }
 
-type BrandIncrementalMap = Record<string, { nz: number | null; uk: number | null; au: number | null; us: number | null }>;
+/** Stored value per market: new format with type discriminant, or legacy plain number */
+type MarketDBValue = { type: "fixed" | "target"; value: number } | number | null;
+type BrandIncrementalMap = Record<string, { nz: MarketDBValue; uk: MarketDBValue; au: MarketDBValue; us: MarketDBValue }>;
+
+/**
+ * Resolve a market cell value to an effective gain percentage.
+ * - "fixed": the stored value is the gain directly (e.g. 15 → add 15%)
+ * - "target": the stored value is the desired coverage floor (e.g. 98 → gain = max(0, 98 − currentCov))
+ * - legacy number: treated as "fixed"
+ */
+function resolveMarketGain(mv: MarketDBValue, currentCov: number): number | null {
+  if (mv == null) return null;
+  if (typeof mv === "number") return mv; // legacy fixed
+  if (mv.type === "target") return Math.max(0, mv.value - currentCov);
+  return mv.value; // fixed
+}
 
 interface Integration {
   id: number;
@@ -258,25 +273,27 @@ export async function GET(req: Request): Promise<NextResponse> {
       //   3. totalIncremental / brandCount     — last-resort fallback using global VIO %
       //      (NOTE: this is a different unit — % of global VIO — so it will understate
       //       the brand-level gain for small brands. Always prefer per-brand values.)
+      const currentCov = (brandCoverage[key] ?? brandCoverage[brand])?.today ?? 0;
+
       let perBrand: number;
       if (integ.brand_incremental) {
         const brandData = integ.brand_incremental[key] ?? integ.brand_incremental[brand];
         if (brandData) {
           if (market !== "all") {
-            // Specific market: use that market's value, fall back to global estimate
+            // Specific market: resolve the stored value (fixed or target), fall back to global estimate
             const mVal = brandData[market as "nz" | "uk" | "au" | "us"];
-            perBrand = mVal != null ? mVal : totalIncremental / brandCount;
+            const resolved = resolveMarketGain(mVal, currentCov);
+            perBrand = resolved != null ? resolved : totalIncremental / brandCount;
           } else {
-            // "All" market: global VIO averages across only the markets the brand
-            // exists in (derived from the VIN sample data). e.g.:
-            //   Vauxhall (UK only)  → divisor = 1
-            //   Holden (NZ + AU)    → divisor = 2
-            //   Toyota (all four)   → divisor = 4
-            // Markets with no per-brand gain entered contribute 0, not nothing.
+            // "All" market: average resolved gains across the markets the brand exists in.
+            // e.g. Vauxhall (UK only) → divisor=1; Holden (NZ+AU) → divisor=2; Toyota → divisor=4.
+            // Markets with no value contribute 0, not nothing (so divisor is always marketCount).
             const hasAny = (["nz", "uk", "au", "us"] as const).some((m) => brandData[m] != null);
             if (hasAny) {
-              const sum = (["nz", "uk", "au", "us"] as const)
-                .reduce((s, m) => s + (brandData[m] ?? 0), 0);
+              const sum = (["nz", "uk", "au", "us"] as const).reduce((s, m) => {
+                const resolved = resolveMarketGain(brandData[m], currentCov);
+                return s + (resolved ?? 0);
+              }, 0);
               const divisor = (brandCoverage[key] ?? brandCoverage[brand])?.marketCount ?? 4;
               perBrand = sum / Math.max(1, divisor);
             } else {
