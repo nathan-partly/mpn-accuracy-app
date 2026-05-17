@@ -217,6 +217,14 @@ export default function DataIntegrationsPage() {
   const [status,     setStatus]     = useState<StatusFilter>("all");
   const [sort,       setSort]       = useState<{ key: SortKey; dir: SortDir }>({ key: "integration_date", dir: "asc" });
 
+  // Expanded rows
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const toggleRow = (id: number) => setExpandedRows((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   // Form state
   const [showForm,  setShowForm]  = useState(false);
   const [editId,    setEditId]    = useState<number | null>(null);
@@ -768,10 +776,36 @@ export default function DataIntegrationsPage() {
                 </thead>
                 <tbody>
                   {filtered.map((row, idx) => {
+                    const isExpanded = expandedRows.has(row.id);
                     const stickyBg = idx % 2 === 0 ? "bg-white" : "bg-grey-50/40";
+                    const rowBg    = idx % 2 === 0 ? "bg-white" : "bg-grey-50/40";
+
+                    // Per-market incremental data (used in expanded panel)
+                    const mktData = [
+                      { label: "NZ", flag: "🇳🇿", manual: row.incremental_nz_pct, computed: row.computed_incremental_nz_pct },
+                      { label: "UK", flag: "🇬🇧", manual: row.incremental_uk_pct, computed: row.computed_incremental_uk_pct },
+                      { label: "AU", flag: "🇦🇺", manual: row.incremental_au_pct, computed: row.computed_incremental_au_pct },
+                      { label: "US", flag: "🇺🇸", manual: row.incremental_us_pct, computed: row.computed_incremental_us_pct },
+                    ];
+                    const hasMktData = mktData.some((m) => (m.manual ?? m.computed) != null);
+                    const hasExtraDetail = hasMktData || row.brands.length > 3;
+
                     return (
-                    <tr key={row.id} className={`group border-b border-grey-100 last:border-0 ${idx % 2 === 0 ? "bg-white" : "bg-grey-50/40"} hover:bg-blue-50/30 transition-colors`}>
-                      <td className={`sticky left-0 z-10 pl-3 pr-1.5 py-1.5 font-mono text-grey-300 text-right tabular-nums transition-colors group-hover:bg-blue-50/30 ${stickyBg}`}>{idx + 1}</td>
+                    <>
+                    <tr
+                      key={row.id}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("button")) return;
+                        if (hasExtraDetail) toggleRow(row.id);
+                      }}
+                      className={`group border-b ${isExpanded ? "border-transparent" : "border-grey-100"} last:border-0 ${rowBg} ${hasExtraDetail ? "cursor-pointer" : ""} hover:bg-blue-50/30 transition-colors`}
+                    >
+                      <td className={`sticky left-0 z-10 pl-3 pr-1.5 py-1.5 font-mono text-grey-300 text-right tabular-nums transition-colors group-hover:bg-blue-50/30 ${stickyBg}`}>
+                        {hasExtraDetail && (
+                          <span className="mr-1 text-grey-300 text-[10px]">{isExpanded ? "▾" : "▸"}</span>
+                        )}
+                        {idx + 1}
+                      </td>
                       <td className={`sticky left-8 z-10 px-3 py-1.5 font-medium text-grey-950 whitespace-nowrap transition-colors group-hover:bg-blue-50/30 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] ${stickyBg}`}>{row.name}</td>
                       <td className="px-3 py-1.5">
                         <span className={`inline-flex items-center px-1.5 py-px rounded-full text-[10px] font-semibold ${row.type === "online" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
@@ -783,70 +817,43 @@ export default function DataIntegrationsPage() {
                           {row.relationship === "direct" ? "Direct" : "3rd party"}
                         </span>
                       </td>
+                      {/* Brands — always show first 3 in collapsed; rest in expanded panel */}
                       <td className="px-3 py-1.5 text-grey-600 max-w-[200px]">
-                        <BrandList brands={row.brands} />
+                        <BrandList brands={row.brands.slice(0, 3)} />
+                        {row.brands.length > 3 && !isExpanded && (
+                          <span className="ml-1 inline-flex items-center px-1.5 py-px rounded-full text-[9px] font-semibold bg-grey-100 text-grey-500">
+                            +{row.brands.length - 3} more
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-1.5">
                         <AvailabilityBadge value={row.data_availability} />
                       </td>
-                      {/* Total VIO % — manual value preferred; auto-estimate as fallback */}
+                      {/* Total VIO % */}
                       <td className="px-3 py-1.5 text-right font-mono">
                         {row.total_vio_pct != null ? (
-                          <span
-                            className="text-grey-700"
-                            title={row.computed_total_vio_pct != null ? `Sample estimate: ~${row.computed_total_vio_pct.toFixed(1)}%` : undefined}
-                          >
+                          <span className="text-grey-700" title={row.computed_total_vio_pct != null ? `Sample estimate: ~${row.computed_total_vio_pct.toFixed(1)}%` : undefined}>
                             {row.total_vio_pct.toFixed(1)}%
                           </span>
                         ) : row.computed_total_vio_pct != null ? (
-                          <span className="text-grey-400" title="Auto-estimated from sample snapshot brand shares — enter a manual value to override">
+                          <span className="text-grey-400" title="Auto-estimated from sample snapshot brand shares">
                             ~{row.computed_total_vio_pct.toFixed(1)}%
                           </span>
                         ) : (
                           <span className="text-grey-300">—</span>
                         )}
                       </td>
-                      {/* Incremental — global value + compact per-market breakdown */}
+                      {/* Incremental — global only in collapsed row */}
                       <td className="px-3 py-1.5 text-right">
-                        {(() => {
-                          const globalVal  = row.incremental_vio_pct;
-                          const globalComp = row.computed_incremental_vio_pct;
-                          const mkts = [
-                            { label: "NZ", manual: row.incremental_nz_pct, computed: row.computed_incremental_nz_pct },
-                            { label: "UK", manual: row.incremental_uk_pct, computed: row.computed_incremental_uk_pct },
-                            { label: "AU", manual: row.incremental_au_pct, computed: row.computed_incremental_au_pct },
-                            { label: "US", manual: row.incremental_us_pct, computed: row.computed_incremental_us_pct },
-                          ].filter((m) => (m.manual ?? m.computed) != null);
-
-                          const globalDisplay = globalVal != null
-                            ? <span className="font-mono font-semibold text-brand-blue">+{globalVal.toFixed(1)}%</span>
-                            : globalComp != null
-                            ? <span className="font-mono font-semibold text-grey-500" title="Auto-estimated from per-brand coverage data">~{globalComp.toFixed(1)}%</span>
-                            : <span className="font-mono text-grey-300">—</span>;
-
-                          return (
-                            <div className="flex flex-col items-end gap-0.5">
-                              {globalDisplay}
-                              {mkts.length > 0 && (
-                                <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                                  {mkts.map(({ label, manual, computed }) => {
-                                    const val = manual ?? computed;
-                                    const isManual = manual != null;
-                                    return (
-                                      <span key={label} className="flex items-center gap-0.5">
-                                        <span className="text-[9px] font-bold text-grey-400">{label}</span>
-                                        <span className={`font-mono text-[10px] ${isManual ? "text-brand-blue" : "text-grey-400"}`}>
-                                          {isManual ? "+" : "~"}{val!.toFixed(1)}%
-                                        </span>
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        {row.incremental_vio_pct != null ? (
+                          <span className="font-mono font-semibold text-brand-blue">+{row.incremental_vio_pct.toFixed(1)}%</span>
+                        ) : row.computed_incremental_vio_pct != null ? (
+                          <span className="font-mono font-semibold text-grey-500" title="Auto-estimated">~{row.computed_incremental_vio_pct.toFixed(1)}%</span>
+                        ) : (
+                          <span className="font-mono text-grey-300">—</span>
+                        )}
                       </td>
+                      {/* Cost */}
                       <td className="px-3 py-1.5 text-right">
                         {(row.annual_cost != null || row.cost_per_vin != null) ? (
                           <div className="flex flex-col items-end gap-px">
@@ -859,6 +866,7 @@ export default function DataIntegrationsPage() {
                           </div>
                         ) : <span className="text-grey-300">—</span>}
                       </td>
+                      {/* Date */}
                       <td className="px-3 py-1.5 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           {row.integration_date
@@ -873,6 +881,7 @@ export default function DataIntegrationsPage() {
                           )}
                         </div>
                       </td>
+                      {/* Actions */}
                       <td className="px-2 py-1.5">
                         {deleteConfirm === row.id ? (
                           <div className="flex items-center gap-1.5">
@@ -888,6 +897,56 @@ export default function DataIntegrationsPage() {
                         )}
                       </td>
                     </tr>
+
+                    {/* ── Expanded panel ── */}
+                    {isExpanded && (
+                      <tr key={`${row.id}-exp`} className={`${rowBg} border-b border-grey-100`}>
+                        <td colSpan={11} className="pl-10 pr-6 pb-3 pt-0">
+                          <div className="flex flex-wrap gap-x-8 gap-y-3">
+
+                            {/* Full brand list if truncated */}
+                            {row.brands.length > 3 && (
+                              <div>
+                                <p className="text-[10px] font-semibold text-grey-400 uppercase tracking-wider mb-1">All brands</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {row.brands.map((b) => (
+                                    <span key={b} className="inline-flex items-center px-1.5 py-px rounded text-[10px] font-semibold bg-grey-100 text-grey-600">{b}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Per-market incremental breakdown */}
+                            {hasMktData && (
+                              <div>
+                                <p className="text-[10px] font-semibold text-grey-400 uppercase tracking-wider mb-1">Incremental by market</p>
+                                <div className="flex items-center gap-4">
+                                  {mktData.map(({ label, flag, manual, computed }) => {
+                                    const val = manual ?? computed;
+                                    const isManual = manual != null;
+                                    return (
+                                      <div key={label} className="flex flex-col items-center gap-0.5">
+                                        <span className="text-base leading-none">{flag}</span>
+                                        <span className="text-[9px] font-bold text-grey-400 uppercase">{label}</span>
+                                        {val != null ? (
+                                          <span className={`font-mono text-xs font-semibold ${isManual ? "text-brand-blue" : "text-grey-500"}`}>
+                                            {isManual ? "+" : "~"}{val.toFixed(1)}%
+                                          </span>
+                                        ) : (
+                                          <span className="font-mono text-xs text-grey-300">—</span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </>
                   );
                 })}
                 </tbody>
