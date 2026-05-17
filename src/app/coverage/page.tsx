@@ -63,6 +63,7 @@ export default function CoveragePage() {
   const sendData = useCallback(async (region: string, sel: SnapshotSelection) => {
     const requestId = ++requestCounter.current;
     const cacheKey = typeof sel === "number" ? `snap:${sel}` : "combined";
+    const isCombined = sel === "ALL";
 
     let data = dataCache.current.get(cacheKey);
     if (!data) {
@@ -80,7 +81,7 @@ export default function CoveragePage() {
     if (requestId !== requestCounter.current) return;
 
     iframeRef.current?.contentWindow?.postMessage(
-      { type: "setData", data, region },
+      { type: "setData", data, region, isCombined },
       "*"
     );
   }, []);
@@ -145,8 +146,10 @@ export default function CoveragePage() {
   const baseline      = regionSnapshots.filter((s) => s.is_baseline);
   const pillSnapshots = [...nonBaseline, ...baseline];
 
-  // Initial iframe src — only set once; all changes go via postMessage
-  const initialSrc = `/api/coverage-html?r=${selectedRegion}`;
+  // Initial iframe src — frozen to mount-time value; never changes after that.
+  // All region / snapshot switches go via postMessage to avoid a reload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialSrc = useRef(`/api/coverage-html`).current;
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>

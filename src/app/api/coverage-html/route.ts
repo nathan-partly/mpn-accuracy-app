@@ -859,6 +859,7 @@ function injectIntegrationCounts(html: string): string {
     blockRulesHtml() + "\n" +
     vinInsightsHtml() + "\n" +
     brandsCoveredStatHtml() + "\n" +
+    heroSubtitlePatchHtml() + "\n" +
     html.slice(idx)
   );
 }
@@ -897,12 +898,16 @@ function injectInitialRegion(html: string, region: string): string {
 // Handles two message types from the parent page:
 //   { type: 'setRegion', region: 'UK' }
 //       — instant region switch, re-renders with existing DATA
-//   { type: 'setData', data: {...}, region: 'UK' }
+//   { type: 'setData', data: {...}, region: 'UK', isCombined: bool }
 //       — replaces DATA entirely then switches region and re-renders;
-//         used when the user picks a different snapshot (avoids a full page reload)
+//         isCombined=true when showing latest-per-brand (the "All" pill)
 function injectPostMessageListener(html: string): string {
   const listener = `
 <script>
+/* isCombined = true when showing latest-per-brand aggregate ("All" pill);
+   false when showing a specific dated snapshot.
+   Initialise to true — the embedded DATA is always the combined view. */
+window._isCombined = true;
 window.addEventListener('message', function(e) {
   if (!e.data) return;
   var valid = ['ALL','UK','US','NZ','AU'];
@@ -918,11 +923,55 @@ window.addEventListener('message', function(e) {
     if (e.data.region && valid.indexOf(e.data.region) !== -1) {
       region = e.data.region;
     }
+    window._isCombined = !!e.data.isCombined;
     renderAll();
   }
 });
 <\/script>`;
   return html.replace("</body>", listener + "\n</body>");
+}
+
+// ── Patch hero subtitle to show total brand context + "latest per brand" note ─
+// renderHero() shows filteredCount (brands passing minN) but not the total, which
+// looks confusing next to KPI cards that reference the full brand universe.
+// This patch changes "X brands" → "X of Y brands" when filtering is active,
+// and appends "· latest per brand" when showing the combined/aggregate view.
+function heroSubtitlePatchHtml(): string {
+  return `
+<script>
+(function () {
+  function patchHeroSubtitle() {
+    if (typeof renderHero === 'undefined') { setTimeout(patchHeroSubtitle, 80); return; }
+    var _orig = renderHero;
+    renderHero = function (brands) {
+      _orig(brands);
+      var heroSub = document.getElementById('heroSub');
+      if (!heroSub) return;
+      var minNEl = document.getElementById('minN');
+      var minN   = parseInt((minNEl || {value:'10'}).value || '10');
+      var filteredCount = brands.filter(function(b) { return b.total >= minN; }).length;
+      var totalCount    = brands.length;
+      /* Replace "X brands" with "X of Y brands" when the minN filter is hiding some */
+      if (filteredCount < totalCount) {
+        heroSub.textContent = heroSub.textContent.replace(
+          /\b(\d[\d,]*) brands\b/,
+          filteredCount + ' of ' + totalCount + ' brands'
+        );
+      }
+      /* Append "· latest per brand" for the combined / aggregate view */
+      if (window._isCombined) {
+        heroSub.textContent = heroSub.textContent.replace(
+          'VINs sampled',
+          'VINs sampled · latest per brand'
+        );
+      }
+    };
+    /* Fire immediately so the initial render is patched too */
+    renderHero(DATA[region] || []);
+  }
+  patchHeroSubtitle();
+})();
+<\/script>`;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
