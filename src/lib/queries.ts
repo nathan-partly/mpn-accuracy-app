@@ -868,6 +868,7 @@ export interface CoverageSampleSnapshot {
   row_count: number | null;
   is_baseline: boolean;
   created_at: string;
+  avg_rate?: number;
 }
 
 export interface CoverageSampleRow {
@@ -883,9 +884,15 @@ export interface CoverageSampleRow {
 /** List all sample snapshots, newest first. */
 export async function getCoverageSampleSnapshots(): Promise<CoverageSampleSnapshot[]> {
   const rows = await sql`
-    SELECT id, region, snapshot_date::text, uploaded_by, notes, row_count, is_baseline, created_at
-    FROM coverage_sample_snapshots
-    ORDER BY snapshot_date DESC, created_at DESC
+    SELECT
+      s.id, s.region, s.snapshot_date::text, s.uploaded_by, s.notes, s.row_count, s.is_baseline, s.created_at,
+      ROUND(
+        100.0 * SUM(r.y)::numeric / NULLIF(SUM(r.total)::numeric, 0)
+      , 1)::float AS avg_rate
+    FROM coverage_sample_snapshots s
+    LEFT JOIN coverage_sample_rows r ON r.snapshot_id = s.id
+    GROUP BY s.id, s.region, s.snapshot_date, s.uploaded_by, s.notes, s.row_count, s.is_baseline, s.created_at
+    ORDER BY s.snapshot_date DESC, s.created_at DESC
   `;
   return rows as CoverageSampleSnapshot[];
 }
@@ -928,6 +935,41 @@ export async function getCoverageDashboardData(
   const regions = ["UK", "NZ", "AU", "US", "ALL"];
   const data: Record<string, CoverageSampleRow[]> = {};
 
+  // Build VIN lookup from latest coverage_vin_snapshots
+  const vinLookup = new Map<string, { yv: string[]; nv: string[] }>();
+  try {
+    const vinSnaps = await sql`SELECT id FROM coverage_vin_snapshots ORDER BY uploaded_at DESC LIMIT 1`;
+    if (vinSnaps.length > 0) {
+      const vinSnapId = (vinSnaps[0] as { id: number }).id;
+      const vinRows = await sql`
+        SELECT
+          UPPER(REGEXP_REPLACE(input_make, '[^A-Z0-9]', '', 'g')) AS make_key,
+          UPPER(input_region) AS region_key,
+          COALESCE(
+            array_agg(vin ORDER BY vin) FILTER (WHERE gcs_found = true),
+            ARRAY[]::text[]
+          ) AS yv,
+          COALESCE(
+            array_agg(vin ORDER BY vin) FILTER (WHERE gcs_found = false),
+            ARRAY[]::text[]
+          ) AS nv
+        FROM coverage_vin_data
+        WHERE snapshot_id = ${vinSnapId}
+        GROUP BY
+          UPPER(REGEXP_REPLACE(input_make, '[^A-Z0-9]', '', 'g')),
+          UPPER(input_region)
+      `;
+      for (const row of vinRows as Array<{ make_key: string; region_key: string; yv: string[]; nv: string[] }>) {
+        vinLookup.set(`${row.make_key}:${row.region_key}`, {
+          yv: Array.isArray(row.yv) ? row.yv : [],
+          nv: Array.isArray(row.nv) ? row.nv : [],
+        });
+      }
+    }
+  } catch (e) {
+    console.error('[getCoverageDashboardData] VIN lookup failed:', e);
+  }
+
   if (snapshotId) {
     // Specific snapshot — populate its region AND "ALL" with this data.
     // Leave every other region empty so those tabs show "no data",
@@ -942,8 +984,14 @@ export async function getCoverageDashboardData(
       FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
       ORDER BY total DESC
     ` : [];
-    // HTML template requires yv/nv arrays — we don't store them, so provide empty arrays
-    const rows = (rawRows as CoverageSampleRow[]).map((r) => ({ ...r, yv: [], nv: [] }));
+    const pinnedRegionUpper = pinnedRegion ? pinnedRegion.toUpperCase() : '';
+    const rows = (rawRows as CoverageSampleRow[]).map((r) => {
+      const makeKey = String(r.make).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const vins = pinnedRegionUpper && pinnedRegionUpper !== 'ALL'
+        ? (vinLookup.get(`${makeKey}:${pinnedRegionUpper}`) ?? { yv: [], nv: [] })
+        : { yv: [], nv: [] };
+      return { ...r, ...vins };
+    });
 
     for (const region of regions) {
       if (region === pinnedRegion || region === "ALL") {
@@ -967,8 +1015,13 @@ export async function getCoverageDashboardData(
       WHERE s.region = ${region}
       ORDER BY r.make, s.snapshot_date DESC, s.is_baseline ASC, s.created_at DESC
     `;
-    // HTML template requires yv/nv arrays — we don't store them, so provide empty arrays
-    data[region] = (rawRows as CoverageSampleRow[]).map((r) => ({ ...r, yv: [], nv: [] }));
+    data[region] = (rawRows as CoverageSampleRow[]).map((r) => {
+      const makeKey = String(r.make).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const vins = region !== 'ALL'
+        ? (vinLookup.get(`${makeKey}:${region.toUpperCase()}`) ?? { yv: [], nv: [] })
+        : { yv: [], nv: [] };
+      return { ...r, ...vins };
+    });
   }
 
   return data;

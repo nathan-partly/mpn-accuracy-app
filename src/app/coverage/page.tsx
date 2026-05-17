@@ -12,6 +12,7 @@ interface Snapshot {
   row_count: number | null;
   is_baseline: boolean;
   created_at: string;
+  avg_rate?: number;
 }
 
 // "ALL" = combined/aggregate view (latest per brand)
@@ -29,6 +30,11 @@ const REGIONS = [
 function fmtDate(iso: string) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fmtShortDate(iso: string) {
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 /** Most recent non-baseline snapshot for a region, or "ALL" if none. */
@@ -200,55 +206,70 @@ export default function CoveragePage() {
         ))}
       </div>
 
-      {/* ── Snapshot pills — only for specific regions ── */}
+      {/* ── Snapshot bar chart — only for specific regions ── */}
       {selectedRegion !== "ALL" && (
-        <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto">
+        <div className="bg-grey-50 border-b border-grey-100 px-6 flex-shrink-0 flex items-end gap-2 overflow-x-auto" style={{ minHeight: 92, paddingTop: 12, paddingBottom: 8 }}>
 
-          {/* "All" pill — combined view across all snapshots */}
-          <button
-            onClick={() => handleSelectionChange("ALL")}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors flex-shrink-0 ${
-              selectedSel === "ALL"
-                ? "bg-brand-blue text-white border-brand-blue"
-                : "bg-white text-grey-600 border-grey-200 hover:border-brand-blue hover:text-brand-blue"
-            }`}
-          >
-            All
-          </button>
+          {/* "All" combined-view pill */}
+          <div className="flex flex-col items-center flex-shrink-0 self-end pb-0.5">
+            <button
+              onClick={() => handleSelectionChange("ALL")}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors flex-shrink-0 ${
+                selectedSel === "ALL"
+                  ? "bg-brand-blue text-white border-brand-blue"
+                  : "bg-white text-grey-600 border-grey-200 hover:border-brand-blue hover:text-brand-blue"
+              }`}
+            >
+              All
+            </button>
+          </div>
 
-          {pillSnapshots.length > 0 && <div className="w-px h-4 bg-grey-200 flex-shrink-0" />}
+          {pillSnapshots.length > 0 && <div className="w-px bg-grey-200 flex-shrink-0 self-stretch my-1" />}
 
           {loading ? (
-            <span className="text-xs text-grey-400 italic">Loading…</span>
+            <span className="text-xs text-grey-400 italic self-center">Loading…</span>
           ) : (
             pillSnapshots.map((snap) => {
               const isSelected = selectedSel === snap.id;
+              const rate = snap.avg_rate ?? 0;
+              const BAR_MAX = 56;
+              const barPx = Math.max(6, Math.round((rate / 100) * BAR_MAX));
+              const barColor = snap.is_baseline
+                ? "bg-grey-300"
+                : rate >= 80 ? "bg-emerald-400"
+                : rate >= 50 ? "bg-amber-400"
+                : "bg-red-400";
+
               return (
                 <button
                   key={snap.id}
                   onClick={() => handleSelectionChange(snap.id)}
-                  title={snap.notes ?? undefined}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-colors flex-shrink-0 ${
-                    isSelected
-                      ? "bg-brand-blue text-white border-brand-blue"
-                      : snap.is_baseline
-                      ? "bg-white text-grey-400 border-grey-200 hover:border-grey-400 hover:text-grey-600"
-                      : "bg-white text-grey-700 border-grey-200 hover:border-brand-blue hover:text-brand-blue"
-                  }`}
+                  title={`${snap.snapshot_date}: ${rate.toFixed(1)}%`}
+                  className="flex flex-col items-center flex-shrink-0 group gap-0.5"
                 >
-                  {!snap.is_baseline && (
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isSelected ? "bg-white" : "bg-brand-blue"}`} />
-                  )}
-                  <span>{fmtDate(snap.snapshot_date)}</span>
+                  {/* Rate label above bar */}
+                  <span className={`text-[10px] font-semibold transition-colors ${
+                    isSelected ? "text-brand-blue" : snap.is_baseline ? "text-grey-400" : "text-grey-600"
+                  }`}>
+                    {rate > 0 ? `${rate.toFixed(0)}%` : "—"}
+                  </span>
+                  {/* Bar area — fixed height, bar grows from bottom */}
+                  <div className="flex items-end" style={{ height: BAR_MAX }}>
+                    <div
+                      className={`w-9 rounded-t-sm transition-all ${barColor} ${
+                        isSelected ? "ring-2 ring-brand-blue ring-offset-1" : "group-hover:opacity-75"
+                      }`}
+                      style={{ height: barPx }}
+                    />
+                  </div>
+                  {/* Date label */}
+                  <span className={`text-[10px] whitespace-nowrap transition-colors ${
+                    isSelected ? "text-brand-blue font-semibold" : "text-grey-500"
+                  }`}>
+                    {fmtShortDate(snap.snapshot_date)}
+                  </span>
                   {snap.is_baseline && (
-                    <span className={`text-[10px] ${isSelected ? "text-blue-200" : "text-grey-400"}`}>
-                      baseline
-                    </span>
-                  )}
-                  {snap.row_count && (
-                    <span className={`text-[10px] ${isSelected ? "text-blue-200" : "text-grey-400"}`}>
-                      {snap.row_count} brands
-                    </span>
+                    <span className="text-[9px] text-grey-400">baseline</span>
                   )}
                 </button>
               );
@@ -256,7 +277,7 @@ export default function CoveragePage() {
           )}
 
           {nonBaseline.length === 0 && !loading && (
-            <span className="ml-2 text-xs text-grey-400 italic">
+            <span className="ml-2 text-xs text-grey-400 italic self-center">
               No snapshots yet — upload one to track progress
             </span>
           )}
