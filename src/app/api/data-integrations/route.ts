@@ -16,6 +16,12 @@ function marketGainValue(mv: MarketDBValue): number | null {
   return null; // "target" — skip in aggregate estimate
 }
 
+/** Normalise a brand name for fuzzy matching across sources.
+ *  Converts to uppercase, replaces punctuation/hyphens with spaces, collapses whitespace. */
+function normBrand(s: string): string {
+  return s.toUpperCase().replace(/[-_/\\]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export type DataAvailability = "integrated" | "available" | "high_confidence" | "low_confidence" | null;
 
 export interface DataIntegration {
@@ -106,8 +112,8 @@ export async function GET() {
 
     // ── 2. Fetch brand shares from latest non-baseline snapshot per region ─────
     // share = that brand's % of the combined VIN universe across all active regions.
-    // Used to auto-compute total_vio_pct / incremental_vio_pct when not set manually.
-    const brandShareMap = new Map<string, number>(); // UPPERCASED make → share %
+    // Keys are normalised (uppercase, hyphens → spaces) for fuzzy matching.
+    const brandShareMap = new Map<string, number>();
     try {
       const shareRows = await sql`
         WITH latest_per_region AS (
@@ -130,19 +136,32 @@ export async function GET() {
       ` as Array<{ make: string; share: number }>;
 
       for (const row of shareRows) {
-        brandShareMap.set(row.make, typeof row.share === "string" ? parseFloat(row.share) : (row.share ?? 0));
+        const share = typeof row.share === "string" ? parseFloat(row.share) : (row.share ?? 0);
+        // Store under both the raw uppercase key AND the normalised key so both
+        // "MERCEDES-BENZ" (from snapshot) and "MERCEDES BENZ" (from integration) resolve.
+        brandShareMap.set(row.make, share);
+        brandShareMap.set(normBrand(row.make), share);
       }
     } catch {
       // Non-fatal — computed values will be null if snapshot data is unavailable
     }
 
-    // ── 3. Enrich each integration with computed values ────────────────────────
-    for (const integ of integrations) {
-      const brands = (integ.brands ?? []).map((b) => b.toUpperCase());
+    // Helper: look up a brand in the share map, trying both raw-uppercase and normalised keys
+    const getShare = (brand: string): number =>
+      brandShareMap.get(brand.toUpperCase()) ??
+      brandShareMap.get(normBrand(brand)) ??
+      0;
 
-      // computed_total_vio_pct: sum of brand shares (only when manual value is absent)
-      if (integ.total_vio_pct == null && brands.length > 0 && brandShareMap.size > 0) {
-        const total = brands.reduce((s, b) => s + (brandShareMap.get(b) ?? 0), 0);
+    // ── 3. Enrich each integration with computed values ────────────────────────
+    // Always compute regardless of whether a manual value exists — the UI decides
+    // which one to display. This lets rows with stale/wrong manual values still
+    // show the auto-estimate in the tooltip or as a fallback.
+    for (const integ of integrations) {
+      const brands = (integ.brands ?? []);
+
+      // computed_total_vio_pct: sum of brand shares from sample data
+      if (brands.length > 0 && brandShareMap.size > 0) {
+        const total = brands.reduce((s, b) => s + getShare(b), 0);
         integ.computed_total_vio_pct = total > 0 ? parseFloat(total.toFixed(2)) : null;
       } else {
         integ.computed_total_vio_pct = null;
@@ -150,18 +169,18 @@ export async function GET() {
 
       // computed_incremental_vio_pct: Σ(brand_share × avg_fixed_market_gain%)
       // Only meaningful when brand_incremental has fixed-type entries.
-      if (integ.incremental_vio_pct == null && integ.brand_incremental && brandShareMap.size > 0) {
+      if (integ.brand_incremental && brandShareMap.size > 0) {
         let weightedGainSum = 0;
         let anyGain = false;
         for (const [brand, markets] of Object.entries(integ.brand_incremental)) {
-          const share = (brandShareMap.get(brand.toUpperCase()) ?? 0) / 100; // fraction
+          const share = getShare(brand) / 100; // fraction of total VIN universe
           if (share <= 0) continue;
           const gains = (["nz", "uk", "au", "us"] as const)
             .map((m) => marketGainValue(markets[m]))
             .filter((v): v is number => v != null);
           if (gains.length === 0) continue;
           const avgGain = gains.reduce((s, v) => s + v, 0) / gains.length;
-          weightedGainSum += share * avgGain; // = % of total VINs newly covered by this brand
+          weightedGainSum += share * avgGain;
           anyGain = true;
         }
         integ.computed_incremental_vio_pct = anyGain ? parseFloat(weightedGainSum.toFixed(2)) : null;

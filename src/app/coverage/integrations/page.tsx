@@ -781,26 +781,34 @@ export default function DataIntegrationsPage() {
                       <td className="px-3 py-1.5">
                         <AvailabilityBadge value={row.data_availability} />
                       </td>
-                      {/* Total VIO % — manual value, or computed ~estimate */}
+                      {/* Total VIO % — manual value preferred; auto-estimate as fallback */}
                       <td className="px-3 py-1.5 text-right font-mono">
                         {row.total_vio_pct != null ? (
-                          <span className="text-grey-700">{row.total_vio_pct.toFixed(1)}%</span>
+                          <span
+                            className="text-grey-700"
+                            title={row.computed_total_vio_pct != null ? `Sample estimate: ~${row.computed_total_vio_pct.toFixed(1)}%` : undefined}
+                          >
+                            {row.total_vio_pct.toFixed(1)}%
+                          </span>
                         ) : row.computed_total_vio_pct != null ? (
-                          <span className="text-grey-400" title="Auto-estimated from sample snapshot brand shares">
+                          <span className="text-grey-400" title="Auto-estimated from sample snapshot brand shares — enter a manual value to override">
                             ~{row.computed_total_vio_pct.toFixed(1)}%
                           </span>
                         ) : (
                           <span className="text-grey-300">—</span>
                         )}
                       </td>
-                      {/* Incremental — manual value, or computed ~estimate */}
+                      {/* Incremental — manual value preferred; auto-estimate as fallback */}
                       <td className="px-3 py-1.5 text-right">
                         {row.incremental_vio_pct != null ? (
-                          <span className="font-mono font-semibold text-brand-blue">
+                          <span
+                            className="font-mono font-semibold text-brand-blue"
+                            title={row.computed_incremental_vio_pct != null ? `Sample estimate: ~${row.computed_incremental_vio_pct.toFixed(1)}%` : undefined}
+                          >
                             +{row.incremental_vio_pct.toFixed(1)}%
                           </span>
                         ) : row.computed_incremental_vio_pct != null ? (
-                          <span className="font-mono font-semibold text-grey-400" title="Auto-estimated from per-brand coverage impact data">
+                          <span className="font-mono font-semibold text-grey-400" title="Auto-estimated from per-brand coverage impact data — add per-brand values in Edit to improve accuracy">
                             ~{row.computed_incremental_vio_pct.toFixed(1)}%
                           </span>
                         ) : (
