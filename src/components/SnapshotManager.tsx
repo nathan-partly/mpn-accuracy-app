@@ -173,6 +173,14 @@ export function SnapshotManager({ snapshots }: { snapshots: Snapshot[] }) {
                   <td className="px-5 py-3.5 text-right text-grey-400 text-xs">{s.uploaded_by ?? "—"}</td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-3">
+                      <a
+                        href={`/api/coverage-samples/${s.id}`}
+                        download
+                        className="text-xs text-grey-500 font-semibold hover:text-grey-800 hover:underline"
+                        title="Download as CSV"
+                      >
+                        CSV ↓
+                      </a>
                       <button
                         onClick={() => setEditingId(s.id)}
                         className="text-xs text-brand-blue font-semibold hover:underline"
