@@ -15,7 +15,7 @@ interface Snapshot {
   avg_rate?: number;
 }
 
-// "ALL" = combined/aggregate view (latest per brand)
+// "ALL" = combined/aggregate view (all snapshots summed per brand)
 // number = specific snapshot ID
 type SnapshotSelection = "ALL" | number;
 
@@ -223,7 +223,7 @@ export default function CoveragePage() {
               All snapshots
             </span>
             <span className={`text-[10px] ${selectedSel === "ALL" ? "text-blue-200" : "text-grey-400"}`}>
-              latest per brand
+              all snapshots combined
             </span>
           </button>
 

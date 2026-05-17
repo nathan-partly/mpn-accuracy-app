@@ -958,11 +958,11 @@ function heroSubtitlePatchHtml(): string {
           filteredCount + ' of ' + totalCount + ' brands'
         );
       }
-      /* Append "· latest per brand" for the combined / aggregate view */
+      /* Append "· all snapshots combined" for the aggregate view */
       if (window._isCombined) {
         heroSub.textContent = heroSub.textContent.replace(
           'VINs sampled',
-          'VINs sampled · latest per brand'
+          'VINs sampled · all snapshots combined'
         );
       }
     };

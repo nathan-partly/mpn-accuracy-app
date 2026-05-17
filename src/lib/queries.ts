@@ -1003,17 +1003,30 @@ export async function getCoverageDashboardData(
     return data;
   }
 
-  // Latest-per-brand: for each region, pick the most recent row per make
+  // All-snapshots combined: for each region, aggregate ALL snapshot rows per brand
+  // (sum y/n/total across every snapshot so the combined view reflects all data,
+  //  not just the latest single snapshot per brand).
   for (const region of regions) {
     const rawRows = await sql`
-      SELECT DISTINCT ON (r.make)
-        r.make, r.logo,
-        r.y::int, r.n::int, r.total::int,
-        r.rate::float, r.share::float
-      FROM coverage_sample_rows r
-      JOIN coverage_sample_snapshots s ON s.id = r.snapshot_id
-      WHERE s.region = ${region}
-      ORDER BY r.make, s.snapshot_date DESC, s.is_baseline ASC, s.created_at DESC
+      WITH agg AS (
+        SELECT
+          r.make,
+          MAX(r.logo)      AS logo,
+          SUM(r.y)::int    AS y,
+          SUM(r.n)::int    AS n,
+          SUM(r.total)::int AS total
+        FROM coverage_sample_rows r
+        JOIN coverage_sample_snapshots s ON s.id = r.snapshot_id
+        WHERE s.region = ${region}
+        GROUP BY r.make
+      ),
+      grand AS (SELECT COALESCE(SUM(total), 1) AS grand_total FROM agg)
+      SELECT
+        agg.make, agg.logo, agg.y, agg.n, agg.total,
+        ROUND(100.0 * agg.y::numeric  / NULLIF(agg.total::numeric, 0), 1)::float          AS rate,
+        ROUND(100.0 * agg.total::numeric / NULLIF(grand.grand_total::numeric, 0), 1)::float AS share
+      FROM agg, grand
+      ORDER BY agg.total DESC
     `;
     data[region] = (rawRows as CoverageSampleRow[]).map((r) => {
       const makeKey = String(r.make).toUpperCase().replace(/[^A-Z0-9]/g, '');
