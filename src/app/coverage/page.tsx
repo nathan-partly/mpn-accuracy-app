@@ -286,6 +286,15 @@ export default function CoveragePage() {
                       {snap.row_count} brands
                     </span>
                   )}
+                  {/* Notes */}
+                  {snap.notes && (
+                    <span
+                      className={`text-[10px] max-w-[140px] truncate italic ${isSelected ? "text-blue-100" : "text-grey-500"}`}
+                      title={snap.notes}
+                    >
+                      {snap.notes}
+                    </span>
+                  )}
                 </button>
               );
             })
