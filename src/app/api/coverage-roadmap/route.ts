@@ -96,70 +96,71 @@ export async function GET(req: Request): Promise<NextResponse> {
   const debugMode = searchParams.get("debug") === "1";
   const todayISO = new Date().toISOString().split("T")[0];
 
-  // ── 1. Per-brand coverage from VIN sample data (block-rule-adjusted) ──────────
-  // Query coverage_vin_data directly so we can apply `rule_id IS NULL` — this
-  // excludes VINs whose "coverage" came from a block rule match rather than genuine
-  // GCS lookup, matching the adjusted figures shown on the main VIN Coverage Dashboard.
-  // marketCount: how many of the four markets a brand actually has VINs in.
-  // Used as the divisor when averaging per-market incremental gains for the "all" view —
-  // e.g. Vauxhall (UK only) → ÷1; Holden (NZ+AU) → ÷2; Toyota (all four) → ÷4.
+  // ── 1. Per-brand coverage from the latest CSV sample snapshots ────────────────
+  // Uses the most recently uploaded non-baseline snapshot per region — the same data
+  // source as the VIN Coverage Dashboard brand table, so numbers are always consistent.
+  // marketCount: how many of the four markets a brand actually has snapshot rows in.
   const brandCoverage: Record<string, { today: number; totalVins: number; marketCount: number }> = {};
   try {
-    // Get latest VIN snapshot id
-    const snapRows = await sql`
-      SELECT id FROM coverage_vin_snapshots
-      ORDER BY uploaded_at DESC LIMIT 1
-    `;
-    if (snapRows.length > 0) {
-      const snapId = (snapRows[0] as { id: number }).id;
+    if (market === "all") {
+      // Latest non-baseline snapshot per region, then aggregate across all regions
+      const latestSnaps = await sql`
+        SELECT DISTINCT ON (region) id, region
+        FROM coverage_sample_snapshots
+        WHERE is_baseline = false
+        ORDER BY region, snapshot_date DESC, created_at DESC
+      ` as Array<{ id: number; region: string }>;
 
-      // For a specific market, filter by that region; for "all", aggregate across all regions.
-      // totalVins    = total VINs regardless of rule_id (the full VIO universe for this brand/market)
-      // covered      = VINs where gcs_found = true AND no block rule applied
-      // market_count = number of distinct markets (NZ/UK/AU/US) the brand has VINs in
-      if (market === "all") {
-        const brandRows = (await sql`
+      if (latestSnaps.length > 0) {
+        const snapIds = latestSnaps.map((s) => s.id);
+        const brandRows = await sql`
           SELECT
-            UPPER(input_make)                                                         AS brand,
-            COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text        AS covered,
-            COUNT(*)::text                                                             AS total,
-            COUNT(DISTINCT UPPER(input_region))
-              FILTER (WHERE UPPER(input_region) IN ('NZ','UK','AU','US'))::text        AS market_count
-          FROM coverage_vin_data
-          WHERE snapshot_id = ${snapId}
-          GROUP BY UPPER(input_make)
-        `) as Array<{ brand: string; covered: string; total: string; market_count: string }>;
+            UPPER(make)          AS brand,
+            SUM(y)::int          AS covered,
+            SUM(total)::int      AS total,
+            COUNT(*)::int        AS market_count
+          FROM coverage_sample_rows
+          WHERE snapshot_id = ANY(${snapIds})
+          GROUP BY UPPER(make)
+        ` as Array<{ brand: string; covered: number; total: number; market_count: number }>;
 
         for (const row of brandRows) {
-          const total       = parseInt(row.total,        10) || 0;
-          const covered     = parseInt(row.covered,      10) || 0;
-          const marketCount = parseInt(row.market_count, 10) || 1;
-          const pct         = total > 0 ? (covered / total) * 100 : 0;
+          const total       = typeof row.total       === "string" ? parseInt(row.total,       10) : (row.total       ?? 0);
+          const covered     = typeof row.covered     === "string" ? parseInt(row.covered,     10) : (row.covered     ?? 0);
+          const marketCount = typeof row.market_count === "string" ? parseInt(row.market_count, 10) : (row.market_count ?? 1);
+          const pct = total > 0 ? (covered / total) * 100 : 0;
           brandCoverage[row.brand] = { today: pct, totalVins: total, marketCount };
         }
-      } else {
-        const regionFilter = regionKey(market); // "NZ" | "UK" | "AU" | "US"
-        const brandRows = (await sql`
-          SELECT
-            UPPER(input_make)                                                   AS brand,
-            COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::text AS covered,
-            COUNT(*)::text                                                      AS total
-          FROM coverage_vin_data
+      }
+    } else {
+      // Specific market — use the latest non-baseline snapshot for that region
+      const regionFilter = regionKey(market); // "NZ" | "UK" | "AU" | "US"
+      const latestSnap = await sql`
+        SELECT id FROM coverage_sample_snapshots
+        WHERE is_baseline = false AND region = ${regionFilter}
+        ORDER BY snapshot_date DESC, created_at DESC
+        LIMIT 1
+      ` as Array<{ id: number }>;
+
+      if (latestSnap.length > 0) {
+        const snapId = latestSnap[0].id;
+        const brandRows = await sql`
+          SELECT UPPER(make) AS brand, y::int AS covered, total::int AS total
+          FROM coverage_sample_rows
           WHERE snapshot_id = ${snapId}
-            AND UPPER(input_region) = UPPER(${regionFilter})
-          GROUP BY UPPER(input_make)
-        `) as Array<{ brand: string; covered: string; total: string }>;
+        ` as Array<{ brand: string; covered: number; total: number }>;
 
         for (const row of brandRows) {
-          const total   = parseInt(row.total,   10) || 0;
-          const covered = parseInt(row.covered, 10) || 0;
-          const pct     = total > 0 ? (covered / total) * 100 : 0;
+          const total   = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+          const covered = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+          const pct = total > 0 ? (covered / total) * 100 : 0;
           brandCoverage[row.brand] = { today: pct, totalVins: total, marketCount: 1 };
         }
       }
     }
-  } catch {
-    // No VIN snapshot — all brands show 0% today
+  } catch (e) {
+    console.error("[coverage-roadmap] sample snapshot coverage failed:", e);
+    // Falls through to empty brandCoverage — gains still show, today = 0%
   }
 
   // ── 2. Integrations — ensure market columns exist before selecting them ────────
@@ -237,9 +238,9 @@ export async function GET(req: Request): Promise<NextResponse> {
     // Non-fatal: fall back to sequential scan values already loaded above
   }
 
-  // ── 2c. Fallback: fill missing brands from sample snapshot coverage ──────────────
-  // Some brands (e.g. Opel) may exist in sample snapshots but not in the VIN snapshot.
-  // Without a fallback, target-type gains treat current coverage as 0%, inflating the gain.
+  // ── 2c. Fallback: fill missing brands from the VIN snapshot ─────────────────────
+  // Some brands in integrations may not appear in the sample snapshots (e.g. AU/US brands
+  // if no AU/US sample has been uploaded recently). Fall back to coverage_vin_data for those.
   try {
     const missingBrands = new Set<string>();
     for (const integ of integrations) {
@@ -250,53 +251,41 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
 
     if (missingBrands.size > 0) {
-      const latestSampleSnaps = await sql`
-        SELECT DISTINCT ON (region) id, region
-        FROM coverage_sample_snapshots
-        WHERE is_baseline = false
-        ORDER BY region, snapshot_date DESC, created_at DESC
-      ` as Array<{ id: number; region: string }>;
+      const snapRows = await sql`SELECT id FROM coverage_vin_snapshots ORDER BY uploaded_at DESC LIMIT 1`;
+      if (snapRows.length > 0) {
+        const snapId = (snapRows[0] as { id: number }).id;
+        const regionFilter = market !== "all" ? regionKey(market) : null;
 
-      if (latestSampleSnaps.length > 0) {
-        const snapIds = latestSampleSnaps.map((s) => s.id);
-        const regionToSnap: Record<string, number> = {};
-        for (const s of latestSampleSnaps) regionToSnap[s.region.toUpperCase()] = s.id;
+        const vinRows = regionFilter
+          ? await sql`
+              SELECT
+                UPPER(input_make) AS brand,
+                COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::int AS covered,
+                COUNT(*)::int AS total
+              FROM coverage_vin_data
+              WHERE snapshot_id = ${snapId} AND UPPER(input_region) = ${regionFilter}
+              GROUP BY UPPER(input_make)
+            ` as Array<{ brand: string; covered: number; total: number }>
+          : await sql`
+              SELECT
+                UPPER(input_make) AS brand,
+                COUNT(*) FILTER (WHERE gcs_found = true AND rule_id IS NULL)::int AS covered,
+                COUNT(*)::int AS total
+              FROM coverage_vin_data
+              WHERE snapshot_id = ${snapId}
+              GROUP BY UPPER(input_make)
+            ` as Array<{ brand: string; covered: number; total: number }>;
 
-        if (market === "all") {
-          const sampleRows = await sql`
-            SELECT UPPER(make) AS make, SUM(y)::int AS covered, SUM(total)::int AS total
-            FROM coverage_sample_rows
-            WHERE snapshot_id = ANY(${snapIds})
-            GROUP BY UPPER(make)
-          ` as Array<{ make: string; covered: number; total: number }>;
-
-          for (const row of sampleRows) {
-            if (!missingBrands.has(row.make)) continue;
-            const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
-            const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
-            if (t > 0) brandCoverage[row.make] = { today: (c / t) * 100, totalVins: t, marketCount: 1 };
-          }
-        } else {
-          const regionUpper = regionKey(market);
-          const snapId = regionToSnap[regionUpper];
-          if (snapId) {
-            const sampleRows = await sql`
-              SELECT UPPER(make) AS make, y::int AS covered, total::int AS total
-              FROM coverage_sample_rows WHERE snapshot_id = ${snapId}
-            ` as Array<{ make: string; covered: number; total: number }>;
-
-            for (const row of sampleRows) {
-              if (!missingBrands.has(row.make)) continue;
-              const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
-              const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
-              if (t > 0) brandCoverage[row.make] = { today: (c / t) * 100, totalVins: t, marketCount: 1 };
-            }
-          }
+        for (const row of vinRows) {
+          if (!missingBrands.has(row.brand)) continue;
+          const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+          const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+          if (t > 0) brandCoverage[row.brand] = { today: (c / t) * 100, totalVins: t, marketCount: 1 };
         }
       }
     }
   } catch (e) {
-    console.error("[coverage-roadmap] sample snapshot fallback failed:", e);
+    console.error("[coverage-roadmap] VIN snapshot fallback failed:", e);
   }
 
   // ── 3. Collect all brands that appear in any integration ─────────────────────
