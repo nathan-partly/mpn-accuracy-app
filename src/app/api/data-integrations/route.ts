@@ -110,40 +110,48 @@ export async function GET() {
       return { ...rest, brand_incremental } as unknown as DataIntegration;
     });
 
-    // ── 2. Fetch brand shares from latest non-baseline snapshot per region ─────
-    // share = that brand's % of the combined VIN universe across all active regions.
-    // Keys are normalised (uppercase, hyphens → spaces) for fuzzy matching.
+    // ── 2. Fetch brand totals from latest non-baseline snapshot per region ───────
+    // Two simple queries instead of one complex CTE to avoid Neon HTTP driver issues.
+    // Shares are computed in TypeScript after fetching raw totals.
     const brandShareMap = new Map<string, number>();
     try {
-      const shareRows = await sql`
-        WITH latest_per_region AS (
-          SELECT DISTINCT ON (region) id
-          FROM coverage_sample_snapshots
-          WHERE is_baseline = false
-          ORDER BY region, snapshot_date DESC, created_at DESC
-        ),
-        all_brand_totals AS (
-          SELECT
-            UPPER(r.make)       AS make,
-            SUM(r.total)::float AS total
-          FROM coverage_sample_rows r
-          JOIN latest_per_region lpr ON lpr.id = r.snapshot_id
-          GROUP BY UPPER(r.make)
-        ),
-        grand AS (SELECT NULLIF(SUM(total), 0) AS gt FROM all_brand_totals)
-        SELECT make, ROUND(100.0 * total / gt, 2)::float AS share
-        FROM all_brand_totals, grand
-      ` as Array<{ make: string; share: number }>;
+      // Step A: get the latest non-baseline snapshot id per region
+      const latestSnaps = await sql`
+        SELECT DISTINCT ON (region) id
+        FROM coverage_sample_snapshots
+        WHERE is_baseline = false
+        ORDER BY region, snapshot_date DESC, created_at DESC
+      ` as Array<{ id: number }>;
 
-      for (const row of shareRows) {
-        const share = typeof row.share === "string" ? parseFloat(row.share) : (row.share ?? 0);
-        // Store under both the raw uppercase key AND the normalised key so both
-        // "MERCEDES-BENZ" (from snapshot) and "MERCEDES BENZ" (from integration) resolve.
-        brandShareMap.set(row.make, share);
-        brandShareMap.set(normBrand(row.make), share);
+      if (latestSnaps.length > 0) {
+        const snapIds = latestSnaps.map((s) => s.id);
+
+        // Step B: sum brand totals across those snapshot ids
+        const brandRows = await sql`
+          SELECT UPPER(make) AS make, SUM(total)::int AS total
+          FROM coverage_sample_rows
+          WHERE snapshot_id = ANY(${snapIds})
+          GROUP BY UPPER(make)
+        ` as Array<{ make: string; total: number }>;
+
+        // Compute shares in TypeScript to avoid any SQL float/null edge cases
+        const grandTotal = brandRows.reduce((s, r) => {
+          const t = typeof r.total === "string" ? parseInt(r.total, 10) : (r.total ?? 0);
+          return s + t;
+        }, 0);
+
+        if (grandTotal > 0) {
+          for (const row of brandRows) {
+            const t = typeof row.total === "string" ? parseInt(row.total, 10) : (row.total ?? 0);
+            const share = parseFloat(((t / grandTotal) * 100).toFixed(2));
+            // Store under raw uppercase AND normalised key for fuzzy matching
+            brandShareMap.set(row.make, share);
+            brandShareMap.set(normBrand(row.make), share);
+          }
+        }
       }
-    } catch {
-      // Non-fatal — computed values will be null if snapshot data is unavailable
+    } catch (e) {
+      console.error("[data-integrations] brand share query failed:", e);
     }
 
     // Helper: look up a brand in the share map, trying both raw-uppercase and normalised keys
