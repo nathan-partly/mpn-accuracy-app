@@ -879,6 +879,8 @@ export interface CoverageSampleRow {
   total: number;
   rate: number;
   share: number;
+  yv?: string[];
+  nv?: string[];
 }
 
 /** List all sample snapshots, newest first. */
@@ -980,12 +982,18 @@ export async function getCoverageDashboardData(
     const pinnedRegion = snap[0]?.region as string | undefined;
 
     const rawRows = pinnedRegion ? await sql`
-      SELECT make, logo, y, n, total, rate::float, share::float
+      SELECT make, logo, y, n, total, rate::float, share::float, yv, nv
       FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
       ORDER BY total DESC
     ` : [];
     const pinnedRegionUpper = pinnedRegion ? pinnedRegion.toUpperCase() : '';
-    const rows = (rawRows as CoverageSampleRow[]).map((r) => {
+    const rows = (rawRows as (CoverageSampleRow & { yv?: string[] | null; nv?: string[] | null })[]).map((r) => {
+      // Prefer VINs stored directly in the snapshot row (new uploads always have these).
+      // Fall back to the separate VIN lookup table for older snapshots that pre-date the column.
+      const hasStoredVins = (r.yv && r.yv.length > 0) || (r.nv && r.nv.length > 0);
+      if (hasStoredVins) {
+        return { ...r, yv: r.yv ?? [], nv: r.nv ?? [] };
+      }
       const makeKey = String(r.make).toUpperCase().replace(/[^A-Z0-9]/g, '');
       const vins = pinnedRegionUpper && pinnedRegionUpper !== 'ALL'
         ? (vinLookup.get(`${makeKey}:${pinnedRegionUpper}`) ?? { yv: [], nv: [] })
@@ -1064,6 +1072,15 @@ export async function saveCoverageSampleSnapshot(
   uploadedBy?: string,
   notes?: string
 ): Promise<number> {
+  // Idempotent migration — add yv/nv VIN columns if not present yet
+  try {
+    await sql`
+      ALTER TABLE coverage_sample_rows
+        ADD COLUMN IF NOT EXISTS yv text[] DEFAULT '{}'::text[],
+        ADD COLUMN IF NOT EXISTS nv text[] DEFAULT '{}'::text[]
+    `;
+  } catch { /* already applied */ }
+
   const [snap] = await sql`
     INSERT INTO coverage_sample_snapshots (region, snapshot_date, uploaded_by, notes, row_count, is_baseline)
     VALUES (${region}, ${snapshotDate}, ${uploadedBy ?? null}, ${notes ?? null}, ${rows.length}, FALSE)
@@ -1073,9 +1090,11 @@ export async function saveCoverageSampleSnapshot(
 
   // Insert rows in chunks to avoid query size limits
   for (const row of rows) {
+    const yv: string[] = row.yv ?? [];
+    const nv: string[] = row.nv ?? [];
     await sql`
-      INSERT INTO coverage_sample_rows (snapshot_id, make, logo, y, n, total, rate, share)
-      VALUES (${snapId}, ${row.make}, ${row.logo}, ${row.y}, ${row.n}, ${row.total}, ${row.rate}, ${row.share})
+      INSERT INTO coverage_sample_rows (snapshot_id, make, logo, y, n, total, rate, share, yv, nv)
+      VALUES (${snapId}, ${row.make}, ${row.logo}, ${row.y}, ${row.n}, ${row.total}, ${row.rate}, ${row.share}, ${yv}, ${nv})
     `;
   }
 

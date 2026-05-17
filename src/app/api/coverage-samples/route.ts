@@ -53,20 +53,27 @@ function parseCsvToRegionRows(csv: string): Record<string, CoverageSampleRow[]> 
   const iMake = idx("make");
   const iRegion = idx("region");
   const iStatus = idx("coverage status");
+  const iVin = header.indexOf("vin"); // optional — capture if present
 
   // Accumulate per region → make
-  const acc: Record<string, Record<string, { y: number; n: number }>> = {};
+  const acc: Record<string, Record<string, { y: number; n: number; yv: string[]; nv: string[] }>> = {};
 
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
     const make = cols[iMake]?.trim();
     const region = cols[iRegion]?.trim();
     const status = cols[iStatus]?.trim().toLowerCase();
+    const vin = iVin >= 0 ? cols[iVin]?.trim() : undefined;
     if (!make || !region || make === "null") continue;
     if (!acc[region]) acc[region] = {};
-    if (!acc[region][make]) acc[region][make] = { y: 0, n: 0 };
-    if (status === "yes") acc[region][make].y++;
-    else acc[region][make].n++;
+    if (!acc[region][make]) acc[region][make] = { y: 0, n: 0, yv: [], nv: [] };
+    if (status === "yes") {
+      acc[region][make].y++;
+      if (vin) acc[region][make].yv.push(vin);
+    } else {
+      acc[region][make].n++;
+      if (vin) acc[region][make].nv.push(vin);
+    }
   }
 
   if (Object.keys(acc).length === 0) throw new Error("CSV produced no valid data rows");
@@ -79,7 +86,7 @@ function parseCsvToRegionRows(csv: string): Record<string, CoverageSampleRow[]> 
       const total = counts.y + counts.n;
       const rate = total === 0 ? 0 : Math.round((counts.y / total) * 1000) / 10;
       const share = totalVins === 0 ? 0 : Math.round((total / totalVins) * 1000) / 10;
-      return { make, logo: deriveLogo(make), y: counts.y, n: counts.n, total, rate, share };
+      return { make, logo: deriveLogo(make), y: counts.y, n: counts.n, total, rate, share, yv: counts.yv, nv: counts.nv };
     });
   }
 
