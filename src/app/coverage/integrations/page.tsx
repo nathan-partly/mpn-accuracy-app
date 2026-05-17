@@ -151,12 +151,31 @@ function BrandList({ brands }: { brands: string[] }) {
   );
 }
 
+interface CoverageSummaryRegion {
+  region: string;
+  snapshot_date: string;
+  rate: number;
+  total_y: number;
+  total_vins: number;
+  brand_count: number;
+}
+
+interface CoverageSummary {
+  overall_rate: number;
+  total_y: number;
+  total_vins: number;
+  by_region: CoverageSummaryRegion[];
+  earliest_date: string | null;
+  latest_date: string | null;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function DataIntegrationsPage() {
   const [integrations, setIntegrations] = useState<DataIntegration[]>([]);
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState<string | null>(null);
   const [chartRefreshKey, setChartRefreshKey] = useState(0);
+  const [coverageSummary, setCoverageSummary] = useState<CoverageSummary | null>(null);
 
   // Filter + sort state
   const [search,     setSearch]     = useState("");
@@ -190,6 +209,13 @@ export default function DataIntegrationsPage() {
 
   useEffect(() => { fetchIntegrations(); }, [fetchIntegrations]);
 
+  useEffect(() => {
+    fetch("/api/coverage-summary")
+      .then((r) => r.json())
+      .then((data: CoverageSummary) => setCoverageSummary(data))
+      .catch(() => {/* non-fatal */});
+  }, []);
+
   // ── Sort handler ────────────────────────────────────────────────────────────
   function handleSort(key: SortKey) {
     setSort((s) => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "integration_date" ? "asc" : "desc" });
@@ -221,7 +247,6 @@ export default function DataIntegrationsPage() {
   const hasFilters = search || typeFilter !== "all" || relFilter !== "all" || status !== "all";
 
   // ── Summary KPIs (always from full list, not filtered) ──────────────────────
-  const totalIncremental   = integrations.filter((i) => !isFuture(i.integration_date)).reduce((s, i) => s + (i.incremental_vio_pct ?? 0), 0);
   const offlineTotalVio    = integrations.filter((i) => i.type === "offline" && !isFuture(i.integration_date)).reduce((s, i) => s + (i.total_vio_pct ?? 0), 0);
   const projectedTotal     = integrations.reduce((s, i) => s + (i.incremental_vio_pct ?? 0), 0);
   const projectedOffline   = integrations.filter((i) => i.type === "offline").reduce((s, i) => s + (i.total_vio_pct ?? 0), 0);
@@ -333,8 +358,44 @@ export default function DataIntegrationsPage() {
         {/* KPI cards */}
         {integrations.length > 0 && (
           <div className="grid grid-cols-4 gap-4 mb-6">
+
+            {/* Live Coverage — from actual snapshot measurements */}
+            <div className="bg-white rounded-xl border border-grey-100 p-4">
+              <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">Live Coverage</p>
+              {coverageSummary ? (
+                <>
+                  <p className="text-2xl font-bold text-grey-950">
+                    {coverageSummary.overall_rate.toFixed(1)}%
+                  </p>
+                  <p className="text-xs text-grey-400 mt-0.5">
+                    {coverageSummary.total_y.toLocaleString()} of {coverageSummary.total_vins.toLocaleString()} VINs covered
+                  </p>
+                  {coverageSummary.by_region.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {coverageSummary.by_region.map((r) => (
+                        <span
+                          key={r.region}
+                          className="inline-flex items-center gap-1 px-1.5 py-px rounded text-[10px] font-semibold bg-grey-100 text-grey-600"
+                          title={`${r.snapshot_date} · ${r.total_y.toLocaleString()}/${r.total_vins.toLocaleString()} VINs`}
+                        >
+                          {r.region}
+                          <span className={`font-bold ${r.rate >= 80 ? "text-emerald-600" : r.rate >= 50 ? "text-amber-600" : "text-red-500"}`}>
+                            {r.rate.toFixed(1)}%
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-grey-300">—</p>
+                  <p className="text-xs text-grey-400 mt-0.5">loading snapshot data…</p>
+                </>
+              )}
+            </div>
+
             {[
-              { label: "Live Coverage",    value: `${totalIncremental.toFixed(1)}%`,  sub: "cumulative incremental VIO", color: "text-grey-950" },
               { label: "Offline Coverage", value: `${offlineTotalVio.toFixed(1)}%`,   sub: "live offline integrations",  color: "text-grey-950" },
               { label: "Projected Offline",value: `${projectedOffline.toFixed(1)}%`,  sub: "including future targets",   color: "text-emerald-600" },
               { label: "Projected Total",  value: `${projectedTotal.toFixed(1)}%`,    sub: "including future targets",   color: "text-brand-blue" },
