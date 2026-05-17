@@ -6,14 +6,16 @@ export const dynamic = "force-dynamic";
 type MarketDBValue = { type: "fixed" | "target"; value: number } | number | null;
 export type BrandIncrementalMap = Record<string, { nz: MarketDBValue; uk: MarketDBValue; au: MarketDBValue; us: MarketDBValue }>;
 
-/** Extract the numeric gain value from a market cell (handles both old number and new {type,value} formats).
- *  For "target" cells we can't compute a fixed gain without knowing current coverage, so we
- *  treat them as 0 in the aggregate estimate. */
-function marketGainValue(mv: MarketDBValue): number | null {
+/** Resolve the numeric gain value from a market cell.
+ *  - Fixed / legacy number → returns value directly.
+ *  - Target → gain = max(0, target − currentCovPct). Requires current coverage to be passed in.
+ *  Returns null when the value is missing. */
+function resolveMarketGain(mv: MarketDBValue, currentCovPct: number): number | null {
   if (mv == null) return null;
-  if (typeof mv === "number") return mv;
+  if (typeof mv === "number") return mv; // legacy plain-number format (fixed)
   if (mv.type === "fixed") return mv.value;
-  return null; // "target" — skip in aggregate estimate
+  if (mv.type === "target") return Math.max(0, mv.value - currentCovPct);
+  return null;
 }
 
 /** Normalise a brand name for fuzzy matching across sources.
@@ -113,7 +115,8 @@ export async function GET() {
     // ── 2. Fetch brand totals from latest non-baseline snapshot per region ───────
     // Two simple queries instead of one complex CTE to avoid Neon HTTP driver issues.
     // Shares are computed in TypeScript after fetching raw totals.
-    const brandShareMap = new Map<string, number>();
+    const brandShareMap    = new Map<string, number>(); // brand → share of total VIN universe (%)
+    const brandCoverageMap = new Map<string, number>(); // brand → current coverage rate (%)
     try {
       // Step A: get the latest non-baseline snapshot id per region
       const latestSnaps = await sql`
@@ -126,15 +129,15 @@ export async function GET() {
       if (latestSnaps.length > 0) {
         const snapIds = latestSnaps.map((s) => s.id);
 
-        // Step B: sum brand totals across those snapshot ids
+        // Step B: sum brand totals + covered across those snapshot ids
         const brandRows = await sql`
-          SELECT UPPER(make) AS make, SUM(total)::int AS total
+          SELECT UPPER(make) AS make, SUM(total)::int AS total, SUM(covered)::int AS covered
           FROM coverage_sample_rows
           WHERE snapshot_id = ANY(${snapIds})
           GROUP BY UPPER(make)
-        ` as Array<{ make: string; total: number }>;
+        ` as Array<{ make: string; total: number; covered: number }>;
 
-        // Compute shares in TypeScript to avoid any SQL float/null edge cases
+        // Compute shares + per-brand coverage rates in TypeScript
         const grandTotal = brandRows.reduce((s, r) => {
           const t = typeof r.total === "string" ? parseInt(r.total, 10) : (r.total ?? 0);
           return s + t;
@@ -142,11 +145,15 @@ export async function GET() {
 
         if (grandTotal > 0) {
           for (const row of brandRows) {
-            const t = typeof row.total === "string" ? parseInt(row.total, 10) : (row.total ?? 0);
-            const share = parseFloat(((t / grandTotal) * 100).toFixed(2));
+            const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+            const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+            const share   = parseFloat(((t / grandTotal) * 100).toFixed(2));
+            const covRate = t > 0 ? parseFloat(((c / t) * 100).toFixed(2)) : 0;
             // Store under raw uppercase AND normalised key for fuzzy matching
             brandShareMap.set(row.make, share);
             brandShareMap.set(normBrand(row.make), share);
+            brandCoverageMap.set(row.make, covRate);
+            brandCoverageMap.set(normBrand(row.make), covRate);
           }
         }
       }
@@ -154,10 +161,14 @@ export async function GET() {
       console.error("[data-integrations] brand share query failed:", e);
     }
 
-    // Helper: look up a brand in the share map, trying both raw-uppercase and normalised keys
+    // Helpers: look up a brand in each map, trying both raw-uppercase and normalised keys
     const getShare = (brand: string): number =>
       brandShareMap.get(brand.toUpperCase()) ??
       brandShareMap.get(normBrand(brand)) ??
+      0;
+    const getCoverage = (brand: string): number =>
+      brandCoverageMap.get(brand.toUpperCase()) ??
+      brandCoverageMap.get(normBrand(brand)) ??
       0;
 
     // ── 3. Enrich each integration with computed values ────────────────────────
@@ -175,16 +186,17 @@ export async function GET() {
         integ.computed_total_vio_pct = null;
       }
 
-      // computed_incremental_vio_pct: Σ(brand_share × avg_fixed_market_gain%)
-      // Only meaningful when brand_incremental has fixed-type entries.
+      // computed_incremental_vio_pct: Σ(brand_share × avg_market_gain%)
+      // Handles both fixed gains and target-coverage gains (target − current coverage).
       if (integ.brand_incremental && brandShareMap.size > 0) {
         let weightedGainSum = 0;
         let anyGain = false;
         for (const [brand, markets] of Object.entries(integ.brand_incremental)) {
-          const share = getShare(brand) / 100; // fraction of total VIN universe
+          const share      = getShare(brand) / 100; // fraction of total VIN universe
           if (share <= 0) continue;
+          const currentCov = getCoverage(brand); // current coverage rate for this brand (%)
           const gains = (["nz", "uk", "au", "us"] as const)
-            .map((m) => marketGainValue(markets[m]))
+            .map((m) => resolveMarketGain(markets[m], currentCov))
             .filter((v): v is number => v != null);
           if (gains.length === 0) continue;
           const avgGain = gains.reduce((s, v) => s + v, 0) / gains.length;

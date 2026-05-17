@@ -276,9 +276,13 @@ export default function DataIntegrationsPage() {
   const hasFilters = search || typeFilter !== "all" || relFilter !== "all" || status !== "all";
 
   // ── Summary KPIs (always from full list, not filtered) ──────────────────────
-  const offlineTotalVio    = integrations.filter((i) => i.type === "offline" && !isFuture(i.integration_date)).reduce((s, i) => s + (i.total_vio_pct ?? 0), 0);
-  const projectedTotal     = integrations.reduce((s, i) => s + (i.incremental_vio_pct ?? 0), 0);
-  const projectedOffline   = integrations.filter((i) => i.type === "offline").reduce((s, i) => s + (i.total_vio_pct ?? 0), 0);
+  // Use computed fallback values when manual values are null
+  const effectiveTotalVio    = (i: DataIntegration) => i.total_vio_pct ?? i.computed_total_vio_pct ?? 0;
+  const effectiveIncremental = (i: DataIntegration) => i.incremental_vio_pct ?? i.computed_incremental_vio_pct ?? 0;
+
+  const offlineTotalVio    = integrations.filter((i) => i.type === "offline" && !isFuture(i.integration_date)).reduce((s, i) => s + effectiveTotalVio(i), 0);
+  const projectedTotal     = integrations.reduce((s, i) => s + effectiveIncremental(i), 0);
+  const projectedOffline   = integrations.filter((i) => i.type === "offline").reduce((s, i) => s + effectiveTotalVio(i), 0);
   const upcomingCount      = integrations.filter((i) => isFuture(i.integration_date)).length;
 
   // ── Form helpers ────────────────────────────────────────────────────────────
