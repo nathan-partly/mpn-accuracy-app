@@ -163,6 +163,44 @@ export async function GET(req: Request): Promise<NextResponse> {
     // Falls through to empty brandCoverage — gains still show, today = 0%
   }
 
+  // ── 1b. Override totalVins with VIN snapshot counts for accurate brand ordering ──
+  // The weekly CSV samples are small (~50 VINs/brand) and skew by sample composition,
+  // making brand ordering unreliable. The VIN snapshot has thousands of VINs per brand
+  // and gives a much better relative size signal. We overwrite only totalVins (used for
+  // sort order) — the coverage rate (today) stays from the CSV sample.
+  try {
+    const snapRows = await sql`SELECT id FROM coverage_vin_snapshots ORDER BY uploaded_at DESC LIMIT 1`;
+    if (snapRows.length > 0) {
+      const snapId = (snapRows[0] as { id: number }).id;
+      const regionFilter = market !== "all" ? regionKey(market) : null;
+
+      const vinSizeRows = regionFilter
+        ? await sql`
+            SELECT UPPER(input_make) AS brand, COUNT(*)::int AS total_vins
+            FROM coverage_vin_data
+            WHERE snapshot_id = ${snapId} AND UPPER(input_region) = ${regionFilter}
+            GROUP BY UPPER(input_make)
+          ` as Array<{ brand: string; total_vins: number }>
+        : await sql`
+            SELECT UPPER(input_make) AS brand, COUNT(*)::int AS total_vins
+            FROM coverage_vin_data
+            WHERE snapshot_id = ${snapId}
+            GROUP BY UPPER(input_make)
+          ` as Array<{ brand: string; total_vins: number }>;
+
+      for (const row of vinSizeRows) {
+        const t = typeof row.total_vins === "string" ? parseInt(row.total_vins, 10) : (row.total_vins ?? 0);
+        if (brandCoverage[row.brand]) {
+          // Brand exists in sample snapshot — update totalVins only
+          brandCoverage[row.brand].totalVins = t;
+        }
+        // Brands only in VIN snapshot (not in sample) remain as-is or get added in fallback
+      }
+    }
+  } catch (e) {
+    console.error("[coverage-roadmap] VIN snapshot size override failed:", e);
+  }
+
   // ── 2. Integrations — ensure market columns exist before selecting them ────────
   try {
     await sql`
