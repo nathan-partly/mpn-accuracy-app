@@ -943,7 +943,7 @@ export async function getCoverageDashboardData(
       const vinSnapId = (vinSnaps[0] as { id: number }).id;
       const vinRows = await sql`
         SELECT
-          UPPER(REGEXP_REPLACE(input_make, '[^A-Z0-9]', '', 'g')) AS make_key,
+          REGEXP_REPLACE(UPPER(input_make), '[^A-Z0-9]', '', 'g') AS make_key,
           UPPER(input_region) AS region_key,
           COALESCE(
             array_agg(vin ORDER BY vin) FILTER (WHERE gcs_found = true),
@@ -956,7 +956,7 @@ export async function getCoverageDashboardData(
         FROM coverage_vin_data
         WHERE snapshot_id = ${vinSnapId}
         GROUP BY
-          UPPER(REGEXP_REPLACE(input_make, '[^A-Z0-9]', '', 'g')),
+          REGEXP_REPLACE(UPPER(input_make), '[^A-Z0-9]', '', 'g'),
           UPPER(input_region)
       `;
       for (const row of vinRows as Array<{ make_key: string; region_key: string; yv: string[]; nv: string[] }>) {
