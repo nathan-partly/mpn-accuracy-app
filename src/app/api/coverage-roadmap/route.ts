@@ -407,19 +407,11 @@ export async function GET(req: Request): Promise<NextResponse> {
     rows.push(row);
   }
 
-  // Sort by totalVins desc (market importance), then alphabetical
+  // Sort by totalVins desc (largest brand on the left), then alphabetical for ties.
   rows.sort((a, b) => (b.totalVins - a.totalVins) || a.brand.localeCompare(b.brand));
 
-  // Always include every brand that has a positive upcoming gain (they're the whole point of the chart).
-  // Fill remaining slots up to 35 with brands that have no gains, sorted by totalVins.
-  const hasGain = (r: RoadmapBrand) =>
-    Object.keys(brandQuarterGains[r.brand] ?? {}).some((q) => (brandQuarterGains[r.brand]![q] ?? 0) > 0);
-  const withGains    = rows.filter(hasGain);
-  const withoutGains = rows.filter((r) => !hasGain(r));
-  const topRows = [
-    ...withGains,
-    ...withoutGains.slice(0, Math.max(0, 35 - withGains.length)),
-  ];
+  // Cap at 35 brands, keeping the size ordering intact throughout.
+  const topRows = rows.slice(0, 35);
 
   const quarters = Object.keys(quartersFound)
     .filter((q) => q !== "TBD")
