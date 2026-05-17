@@ -292,10 +292,28 @@ export default function DataIntegrationsPage() {
   const effectiveTotalVio    = (i: DataIntegration) => i.total_vio_pct ?? i.computed_total_vio_pct ?? 0;
   const effectiveIncremental = (i: DataIntegration) => i.incremental_vio_pct ?? i.computed_incremental_vio_pct ?? 0;
 
-  const offlineTotalVio    = integrations.filter((i) => i.type === "offline" && !isFuture(i.integration_date)).reduce((s, i) => s + effectiveTotalVio(i), 0);
-  const projectedTotal     = integrations.reduce((s, i) => s + effectiveIncremental(i), 0);
-  const projectedOffline   = integrations.filter((i) => i.type === "offline").reduce((s, i) => s + effectiveTotalVio(i), 0);
-  const upcomingCount      = integrations.filter((i) => isFuture(i.integration_date)).length;
+  // "Offline Coverage" — VIO scope of brands in live (already integrated) offline integrations.
+  // This is brand VIO share, NOT an actual coverage rate. Brands in multiple integrations may
+  // overlap slightly, but in practice these tend to cover distinct OEM brand sets.
+  const offlineTotalVio = integrations
+    .filter((i) => i.type === "offline" && !isFuture(i.integration_date) && !!i.integration_date)
+    .reduce((s, i) => s + effectiveTotalVio(i), 0);
+
+  // "Projected Offline" — VIO scope of ALL planned offline integrations (live + future).
+  const projectedOffline = integrations
+    .filter((i) => i.type === "offline")
+    .reduce((s, i) => s + effectiveTotalVio(i), 0);
+
+  // "Projected Total" — live coverage + incremental gains from integrations not yet live.
+  // Live integrations' gains are already reflected in the measured live rate, so we only
+  // add gains from future-dated or undated (TBD) integrations.
+  const liveRate = coverageSummary?.overall_rate ?? 0;
+  const futureIncremental = integrations
+    .filter((i) => isFuture(i.integration_date) || !i.integration_date)
+    .reduce((s, i) => s + effectiveIncremental(i), 0);
+  const projectedTotal = Math.min(100, liveRate + futureIncremental);
+
+  const upcomingCount = integrations.filter((i) => isFuture(i.integration_date)).length;
 
   // ── Form helpers ────────────────────────────────────────────────────────────
   function openAdd() {
@@ -448,9 +466,9 @@ export default function DataIntegrationsPage() {
             </div>
 
             {[
-              { label: "Offline Coverage", value: `${offlineTotalVio.toFixed(1)}%`,   sub: "live offline integrations",  color: "text-grey-950" },
-              { label: "Projected Offline",value: `${projectedOffline.toFixed(1)}%`,  sub: "including future targets",   color: "text-emerald-600" },
-              { label: "Projected Total",  value: `${projectedTotal.toFixed(1)}%`,    sub: "including future targets",   color: "text-brand-blue" },
+              { label: "Offline VIO Scope",  value: `${offlineTotalVio.toFixed(1)}%`,   sub: "brands in live offline integrations",       color: "text-grey-950" },
+              { label: "Projected Offline", value: `${projectedOffline.toFixed(1)}%`,  sub: "brands in all planned offline integrations", color: "text-emerald-600" },
+              { label: "Projected Total",   value: `${projectedTotal.toFixed(1)}%`,    sub: `live ${liveRate.toFixed(1)}% + future gains`, color: "text-brand-blue" },
             ].map((kpi) => (
               <div key={kpi.label} className="bg-white rounded-xl border border-grey-100 p-4">
                 <p className="text-xs font-semibold text-grey-400 uppercase tracking-widest mb-1">{kpi.label}</p>
