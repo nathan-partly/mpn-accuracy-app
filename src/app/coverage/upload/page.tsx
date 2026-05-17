@@ -13,7 +13,7 @@ export default async function CoverageUploadPage() {
   const snapshots = await getCoverageSampleSnapshots();
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-16">
+    <div className="max-w-4xl mx-auto px-6 py-16">
       {/* Header */}
       <div className="mb-10">
         <p className="text-xs font-semibold text-brand-blue uppercase tracking-widest mb-1">Coverage</p>
