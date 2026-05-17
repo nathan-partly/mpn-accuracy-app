@@ -208,7 +208,7 @@ export default function CoveragePage() {
 
       {/* ── Snapshot cards — only for specific regions ── */}
       {selectedRegion !== "ALL" && (
-        <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto">
+        <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-stretch gap-2 flex-shrink-0 overflow-x-auto">
 
           {/* "All" combined-view pill */}
           <button
@@ -227,7 +227,7 @@ export default function CoveragePage() {
             </span>
           </button>
 
-          {pillSnapshots.length > 0 && <div className="w-px h-8 bg-grey-200 flex-shrink-0" />}
+          {pillSnapshots.length > 0 && <div className="w-px self-stretch bg-grey-200 flex-shrink-0" />}
 
           {loading ? (
             <span className="text-xs text-grey-400 italic">Loading…</span>
