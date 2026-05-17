@@ -206,70 +206,85 @@ export default function CoveragePage() {
         ))}
       </div>
 
-      {/* ── Snapshot bar chart — only for specific regions ── */}
+      {/* ── Snapshot cards — only for specific regions ── */}
       {selectedRegion !== "ALL" && (
-        <div className="bg-grey-50 border-b border-grey-100 px-6 flex-shrink-0 flex items-end gap-2 overflow-x-auto" style={{ minHeight: 92, paddingTop: 12, paddingBottom: 8 }}>
+        <div className="bg-grey-50 border-b border-grey-100 px-6 py-2.5 flex items-center gap-2 flex-shrink-0 overflow-x-auto">
 
           {/* "All" combined-view pill */}
-          <div className="flex flex-col items-center flex-shrink-0 self-end pb-0.5">
-            <button
-              onClick={() => handleSelectionChange("ALL")}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors flex-shrink-0 ${
-                selectedSel === "ALL"
-                  ? "bg-brand-blue text-white border-brand-blue"
-                  : "bg-white text-grey-600 border-grey-200 hover:border-brand-blue hover:text-brand-blue"
-              }`}
-            >
-              All
-            </button>
-          </div>
+          <button
+            onClick={() => handleSelectionChange("ALL")}
+            className={`flex flex-col items-start px-3 py-2 rounded-xl border transition-all flex-shrink-0 ${
+              selectedSel === "ALL"
+                ? "bg-brand-blue border-brand-blue shadow-sm"
+                : "bg-white border-grey-200 hover:border-brand-blue hover:shadow-sm"
+            }`}
+          >
+            <span className={`text-xs font-bold ${selectedSel === "ALL" ? "text-white" : "text-grey-950"}`}>
+              All snapshots
+            </span>
+            <span className={`text-[10px] ${selectedSel === "ALL" ? "text-blue-200" : "text-grey-400"}`}>
+              latest per brand
+            </span>
+          </button>
 
-          {pillSnapshots.length > 0 && <div className="w-px bg-grey-200 flex-shrink-0 self-stretch my-1" />}
+          {pillSnapshots.length > 0 && <div className="w-px h-8 bg-grey-200 flex-shrink-0" />}
 
           {loading ? (
-            <span className="text-xs text-grey-400 italic self-center">Loading…</span>
+            <span className="text-xs text-grey-400 italic">Loading…</span>
           ) : (
-            pillSnapshots.map((snap) => {
+            pillSnapshots.map((snap, i) => {
               const isSelected = selectedSel === snap.id;
               const rate = snap.avg_rate ?? 0;
-              const BAR_MAX = 56;
-              const barPx = Math.max(6, Math.round((rate / 100) * BAR_MAX));
-              const barColor = snap.is_baseline
-                ? "bg-grey-300"
-                : rate >= 80 ? "bg-emerald-400"
-                : rate >= 50 ? "bg-amber-400"
-                : "bg-red-400";
+              const rateColor = snap.is_baseline
+                ? (isSelected ? "text-blue-200" : "text-grey-400")
+                : rate >= 80 ? (isSelected ? "text-emerald-200" : "text-emerald-600")
+                : rate >= 50 ? (isSelected ? "text-amber-200"   : "text-amber-600")
+                : (isSelected ? "text-red-200" : "text-red-500");
 
               return (
                 <button
                   key={snap.id}
                   onClick={() => handleSelectionChange(snap.id)}
-                  title={`${snap.snapshot_date}: ${rate.toFixed(1)}%`}
-                  className="flex flex-col items-center flex-shrink-0 group gap-0.5"
+                  title={snap.notes ?? undefined}
+                  className={`flex flex-col items-start px-3 py-2 rounded-xl border transition-all flex-shrink-0 ${
+                    isSelected
+                      ? "bg-brand-blue border-brand-blue shadow-sm"
+                      : snap.is_baseline
+                      ? "bg-white border-grey-200 hover:border-grey-400"
+                      : "bg-white border-grey-200 hover:border-brand-blue hover:shadow-sm"
+                  }`}
                 >
-                  {/* Rate label above bar */}
-                  <span className={`text-[10px] font-semibold transition-colors ${
-                    isSelected ? "text-brand-blue" : snap.is_baseline ? "text-grey-400" : "text-grey-600"
-                  }`}>
-                    {rate > 0 ? `${rate.toFixed(0)}%` : "—"}
-                  </span>
-                  {/* Bar area — fixed height, bar grows from bottom */}
-                  <div className="flex items-end" style={{ height: BAR_MAX }}>
-                    <div
-                      className={`w-9 rounded-t-sm transition-all ${barColor} ${
-                        isSelected ? "ring-2 ring-brand-blue ring-offset-1" : "group-hover:opacity-75"
-                      }`}
-                      style={{ height: barPx }}
-                    />
+                  {/* Top row: rate + latest badge */}
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className={`text-sm font-bold tabular-nums ${rateColor}`}>
+                      {rate > 0 ? `${rate.toFixed(1)}%` : "—"}
+                    </span>
+                    {i === 0 && !snap.is_baseline && (
+                      <span className={`text-[9px] font-bold px-1 py-px rounded ${
+                        isSelected ? "bg-white/20 text-white" : "bg-brand-tint text-brand-blue"
+                      }`}>
+                        Latest
+                      </span>
+                    )}
+                    {snap.is_baseline && (
+                      <span className={`text-[9px] font-bold px-1 py-px rounded ${
+                        isSelected ? "bg-white/20 text-white" : "bg-grey-100 text-grey-400"
+                      }`}>
+                        Baseline
+                      </span>
+                    )}
                   </div>
-                  {/* Date label */}
-                  <span className={`text-[10px] whitespace-nowrap transition-colors ${
-                    isSelected ? "text-brand-blue font-semibold" : "text-grey-500"
+                  {/* Date */}
+                  <span className={`text-xs font-semibold whitespace-nowrap ${
+                    isSelected ? "text-white" : snap.is_baseline ? "text-grey-500" : "text-grey-800"
                   }`}>
-                    {fmtShortDate(snap.snapshot_date)}
+                    {fmtDate(snap.snapshot_date)}
                   </span>
-                  {snap.is_baseline && (
-                    <span className="text-[9px] text-grey-400">baseline</span>
+                  {/* Brand count */}
+                  {snap.row_count && (
+                    <span className={`text-[10px] ${isSelected ? "text-blue-200" : "text-grey-400"}`}>
+                      {snap.row_count} brands
+                    </span>
                   )}
                 </button>
               );
@@ -277,7 +292,7 @@ export default function CoveragePage() {
           )}
 
           {nonBaseline.length === 0 && !loading && (
-            <span className="ml-2 text-xs text-grey-400 italic self-center">
+            <span className="ml-2 text-xs text-grey-400 italic">
               No snapshots yet — upload one to track progress
             </span>
           )}
