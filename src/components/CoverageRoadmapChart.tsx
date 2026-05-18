@@ -217,7 +217,8 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
                 width={40}
                 ticks={[0, 25, 50, 75, 100]}
               />
-              <Tooltip content={(props) => <CustomTooltip {...props} totalSampleVins={totalSampleVins} />} cursor={{ fill: "rgba(54,50,255,0.04)" }} />
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <Tooltip content={(props) => <CustomTooltip {...(props as any)} totalSampleVins={totalSampleVins} />} cursor={{ fill: "rgba(54,50,255,0.04)" }} />
 
               <Bar
                 dataKey="today"
