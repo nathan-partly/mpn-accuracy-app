@@ -517,7 +517,9 @@ export async function GET(req: Request): Promise<NextResponse> {
     }, { headers: { "Cache-Control": "no-store" } });
   }
 
-  const totalSampleVins = topRows.reduce((s, r) => s + (r.totalVins as number), 0);
+  // Sum ALL brands in the snapshot (not just the integration brands shown in the chart)
+  // so that each brand's share reflects its true proportion of the full sample.
+  const totalSampleVins = Object.values(brandCoverage).reduce((s, v) => s + v.totalVins, 0);
 
   return NextResponse.json(
     { data: topRows, quarters, market, undatedKey: quartersFound["TBD"] ? "TBD" : null, totalSampleVins } satisfies RoadmapResponse,
