@@ -53,26 +53,32 @@ function parseCsvToRegionRows(csv: string): Record<string, CoverageSampleRow[]> 
   const iMake = idx("make");
   const iRegion = idx("region");
   const iStatus = idx("coverage status");
-  const iVin = header.indexOf("vin"); // optional — capture if present
+  const iVin      = header.indexOf("vin");               // optional
+  const iProvider = header.indexOf("data integration");  // optional
 
   // Accumulate per region → make
-  const acc: Record<string, Record<string, { y: number; n: number; yv: string[]; nv: string[] }>> = {};
+  type BrandAcc = { y: number; n: number; yv: string[]; nv: string[]; providers: Record<string, number> };
+  const acc: Record<string, Record<string, BrandAcc>> = {};
 
   for (let i = 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
-    const make = cols[iMake]?.trim();
-    const region = cols[iRegion]?.trim();
-    const status = cols[iStatus]?.trim().toLowerCase();
-    const vin = iVin >= 0 ? cols[iVin]?.trim() : undefined;
+    const make     = cols[iMake]?.trim();
+    const region   = cols[iRegion]?.trim();
+    const status   = cols[iStatus]?.trim().toLowerCase();
+    const vin      = iVin >= 0 ? cols[iVin]?.trim() : undefined;
+    const provider = iProvider >= 0 ? (cols[iProvider]?.trim() || "(unknown)") : undefined;
     if (!make || !region || make === "null") continue;
     if (!acc[region]) acc[region] = {};
-    if (!acc[region][make]) acc[region][make] = { y: 0, n: 0, yv: [], nv: [] };
+    if (!acc[region][make]) acc[region][make] = { y: 0, n: 0, yv: [], nv: [], providers: {} };
     if (status === "yes") {
       acc[region][make].y++;
       if (vin) acc[region][make].yv.push(vin);
     } else {
       acc[region][make].n++;
       if (vin) acc[region][make].nv.push(vin);
+    }
+    if (provider) {
+      acc[region][make].providers[provider] = (acc[region][make].providers[provider] ?? 0) + 1;
     }
   }
 
@@ -86,7 +92,8 @@ function parseCsvToRegionRows(csv: string): Record<string, CoverageSampleRow[]> 
       const total = counts.y + counts.n;
       const rate = total === 0 ? 0 : Math.round((counts.y / total) * 1000) / 10;
       const share = totalVins === 0 ? 0 : Math.round((total / totalVins) * 1000) / 10;
-      return { make, logo: deriveLogo(make), y: counts.y, n: counts.n, total, rate, share, yv: counts.yv, nv: counts.nv };
+      const provider_breakdown = Object.keys(counts.providers).length > 0 ? counts.providers : undefined;
+      return { make, logo: deriveLogo(make), y: counts.y, n: counts.n, total, rate, share, yv: counts.yv, nv: counts.nv, provider_breakdown };
     });
   }
 

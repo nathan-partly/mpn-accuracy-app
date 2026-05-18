@@ -881,6 +881,8 @@ export interface CoverageSampleRow {
   share: number;
   yv?: string[];
   nv?: string[];
+  /** Per-provider VIN counts for this brand+snapshot, e.g. {"YQ":511,"ADP":30,"(unknown)":17} */
+  provider_breakdown?: Record<string, number>;
 }
 
 /** List all sample snapshots, newest first. */
@@ -982,23 +984,27 @@ export async function getCoverageDashboardData(
     const pinnedRegion = snap[0]?.region as string | undefined;
 
     const rawRows = pinnedRegion ? await sql`
-      SELECT make, logo, y, n, total, rate::float, share::float, yv, nv
+      SELECT make, logo, y, n, total, rate::float, share::float, yv, nv,
+             COALESCE(provider_breakdown, '{}'::jsonb) AS provider_breakdown
       FROM coverage_sample_rows WHERE snapshot_id = ${snapshotId}
       ORDER BY total DESC
     ` : [];
     const pinnedRegionUpper = pinnedRegion ? pinnedRegion.toUpperCase() : '';
-    const rows = (rawRows as (CoverageSampleRow & { yv?: string[] | null; nv?: string[] | null })[]).map((r) => {
+    const rows = (rawRows as (CoverageSampleRow & { yv?: string[] | null; nv?: string[] | null; provider_breakdown?: Record<string, number> | null })[]).map((r) => {
       // Prefer VINs stored directly in the snapshot row (new uploads always have these).
       // Fall back to the separate VIN lookup table for older snapshots that pre-date the column.
       const hasStoredVins = (r.yv && r.yv.length > 0) || (r.nv && r.nv.length > 0);
+      const pb = r.provider_breakdown && Object.keys(r.provider_breakdown).length > 0
+        ? r.provider_breakdown
+        : undefined;
       if (hasStoredVins) {
-        return { ...r, yv: r.yv ?? [], nv: r.nv ?? [] };
+        return { ...r, yv: r.yv ?? [], nv: r.nv ?? [], provider_breakdown: pb };
       }
       const makeKey = String(r.make).toUpperCase().replace(/[^A-Z0-9]/g, '');
       const vins = pinnedRegionUpper && pinnedRegionUpper !== 'ALL'
         ? (vinLookup.get(`${makeKey}:${pinnedRegionUpper}`) ?? { yv: [], nv: [] })
         : { yv: [], nv: [] };
-      return { ...r, ...vins };
+      return { ...r, ...vins, provider_breakdown: pb };
     });
 
     for (const region of regions) {
@@ -1072,12 +1078,13 @@ export async function saveCoverageSampleSnapshot(
   uploadedBy?: string,
   notes?: string
 ): Promise<number> {
-  // Idempotent migration — add yv/nv VIN columns if not present yet
+  // Idempotent migrations
   try {
     await sql`
       ALTER TABLE coverage_sample_rows
         ADD COLUMN IF NOT EXISTS yv text[] DEFAULT '{}'::text[],
-        ADD COLUMN IF NOT EXISTS nv text[] DEFAULT '{}'::text[]
+        ADD COLUMN IF NOT EXISTS nv text[] DEFAULT '{}'::text[],
+        ADD COLUMN IF NOT EXISTS provider_breakdown jsonb
     `;
   } catch { /* already applied */ }
 
@@ -1092,9 +1099,12 @@ export async function saveCoverageSampleSnapshot(
   for (const row of rows) {
     const yv: string[] = row.yv ?? [];
     const nv: string[] = row.nv ?? [];
+    const pb = row.provider_breakdown && Object.keys(row.provider_breakdown).length > 0
+      ? JSON.stringify(row.provider_breakdown)
+      : null;
     await sql`
-      INSERT INTO coverage_sample_rows (snapshot_id, make, logo, y, n, total, rate, share, yv, nv)
-      VALUES (${snapId}, ${row.make}, ${row.logo}, ${row.y}, ${row.n}, ${row.total}, ${row.rate}, ${row.share}, ${yv}, ${nv})
+      INSERT INTO coverage_sample_rows (snapshot_id, make, logo, y, n, total, rate, share, yv, nv, provider_breakdown)
+      VALUES (${snapId}, ${row.make}, ${row.logo}, ${row.y}, ${row.n}, ${row.total}, ${row.rate}, ${row.share}, ${yv}, ${nv}, ${pb}::jsonb)
     `;
   }
 
