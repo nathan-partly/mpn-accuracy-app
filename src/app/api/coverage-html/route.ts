@@ -475,7 +475,7 @@ function integrationCountsHtml(): string {
       section.innerHTML = '<div class="drill-integ-hdr">'
         + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2.5">'
         + '<path d="M4 6h16M4 10h16M4 14h10"/></svg>'
-        + 'Data Integrations</div>'
+        + 'Potential Data Integrations</div>'
         + '<div class="drill-integ-cards">' + integCardsHtml(key) + '</div>';
       inner.appendChild(section);
     });
@@ -849,19 +849,28 @@ function brandsCoveredStatHtml(): string {
 }
 
 // ── Provider chart ─────────────────────────────────────────────────────────────
-// Renders a "Provider Usage" panel above the brand table when the current
-// snapshot has provider_breakdown data. Computes totals by summing each
-// brand's provider_breakdown. Hidden for the combined / no-data view.
+// Renders a prominent "Provider Usage" panel BETWEEN the charts row and the
+// brand table panel. Inserted before .tbl-controls's closest .panel ancestor
+// so it's a sibling in <main>, not inside the table panel.
 function providerChartHtml(): string {
   return `
 <style>
   #providerPanel {
     background: #fff; border: 1px solid #EAEAEF; border-radius: 12px;
-    margin-bottom: 20px; overflow: hidden;
+    margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.04);
   }
-  #providerPanel .panel-hdr { padding: 14px 18px 0; }
-  #providerPanel h2 { margin: 0 0 2px; }
-  #providerPanel p  { margin: 0 0 12px; }
+  #providerPanel .prov-accent { height: 4px; background: #10B981; }
+  #providerPanel .prov-hdr-wrap {
+    padding: 16px 22px 0;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  }
+  #providerPanel .prov-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: #0A0A0A; margin: 0 0 3px;
+  }
+  #providerPanel .prov-sub {
+    font-size: 11px; color: #6B7280; margin: 0 0 14px;
+  }
   .prov-table-wrap { overflow-x: auto; }
   .prov-table {
     width: 100%; border-collapse: collapse; font-size: 12px;
@@ -869,38 +878,36 @@ function providerChartHtml(): string {
   .prov-table th {
     text-align: left; font-size: 9px; font-weight: 700;
     text-transform: uppercase; letter-spacing: .06em;
-    color: #9CA3AF; padding: 6px 12px; border-bottom: 1px solid #F0F0F5;
+    color: #9CA3AF; padding: 6px 12px 6px 22px; border-bottom: 1px solid #F0F0F5;
     white-space: nowrap;
   }
-  .prov-table th.r { text-align: right; }
-  .prov-table td { padding: 7px 12px; border-bottom: 1px solid #F8F8FB; color: #374151; }
-  .prov-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .prov-table th.r { text-align: right; padding-right: 22px; }
+  .prov-table td { padding: 8px 12px 8px 22px; border-bottom: 1px solid #F8F8FB; color: #374151; }
+  .prov-table td.r { text-align: right; font-variant-numeric: tabular-nums; padding-right: 22px; }
   .prov-table tr:last-child td { border-bottom: none; }
-  .prov-bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
-  .prov-bar-track { width: 80px; height: 5px; background: #F3F4F6; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
-  .prov-bar-fill  { height: 100%; border-radius: 3px; background: #3632FF; }
-  .prov-pct-val   { font-weight: 700; font-size: 11px; color: #3632FF; width: 42px; text-align: right; }
+  .prov-bar-cell { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+  .prov-bar-track { width: 100px; height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+  .prov-bar-fill  { height: 100%; border-radius: 3px; background: #10B981; }
+  .prov-bar-fill.unk { background: #D1D5DB; }
+  .prov-pct-val   { font-weight: 700; font-size: 12px; color: #10B981; width: 46px; text-align: right; }
+  .prov-pct-val.unk { color: #9CA3AF; }
   .prov-unknown   { font-style: italic; color: #9CA3AF; }
-  .prov-total-row td { font-weight: 700; color: #0A0A0A; border-top: 2px solid #EAEAEF; }
+  .prov-total-row td { font-weight: 700; color: #0A0A0A; background: #F8F9FF; border-top: 2px solid #EAEAEF; }
+  .prov-count-val { font-weight: 600; color: #374151; }
 </style>
 <script>
 (function () {
   var _panel = null;
 
-  function fmtNum(n) {
-    return n.toLocaleString('en-US');
-  }
+  function fmtNum(n) { return n.toLocaleString('en-US'); }
 
-  function buildPanel(totals, regionLabel) {
+  function buildPanel(totals, rlabel) {
     if (!_panel) {
       _panel = document.createElement('div');
       _panel.id = 'providerPanel';
     }
 
-    // Sort by count desc, (unknown) always last
-    var entries = Object.keys(totals).map(function(p) {
-      return { name: p, count: totals[p] };
-    });
+    var entries = Object.keys(totals).map(function(p) { return { name: p, count: totals[p] }; });
     entries.sort(function(a, b) {
       var aU = a.name.toLowerCase().indexOf('unknown') !== -1;
       var bU = b.name.toLowerCase().indexOf('unknown') !== -1;
@@ -910,43 +917,38 @@ function providerChartHtml(): string {
     });
 
     var grandTotal = entries.reduce(function(s, e) { return s + e.count; }, 0);
-    if (grandTotal === 0) {
-      _panel.style.display = 'none';
-      return;
-    }
+    if (grandTotal === 0) { _panel.style.display = 'none'; return; }
     _panel.style.display = '';
 
     var rows = entries.map(function(e) {
       var pct = grandTotal > 0 ? (e.count / grandTotal * 100) : 0;
-      var isUnknown = e.name.toLowerCase().indexOf('unknown') !== -1;
-      var nameClass = isUnknown ? 'prov-unknown' : '';
+      var isU = e.name.toLowerCase().indexOf('unknown') !== -1;
       return '<tr>'
-        + '<td class="' + nameClass + '">' + e.name + '</td>'
-        + '<td class="r">' + fmtNum(e.count) + '</td>'
+        + '<td' + (isU ? ' class="prov-unknown"' : '') + '>' + e.name + '</td>'
+        + '<td class="r"><span class="prov-count-val">' + fmtNum(e.count) + '</span></td>'
         + '<td class="r"><div class="prov-bar-cell">'
-          + '<div class="prov-bar-track"><div class="prov-bar-fill" style="width:' + pct.toFixed(1) + '%"></div></div>'
-          + '<span class="prov-pct-val">' + pct.toFixed(1) + '%</span>'
+          + '<div class="prov-bar-track"><div class="prov-bar-fill' + (isU ? ' unk' : '') + '" style="width:' + pct.toFixed(1) + '%"></div></div>'
+          + '<span class="prov-pct-val' + (isU ? ' unk' : '') + '">' + pct.toFixed(1) + '%</span>'
           + '</div></td>'
         + '</tr>';
     }).join('');
 
     _panel.innerHTML =
-      '<div class="panel-hdr">'
-        + '<h2 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#0A0A0A">PROVIDER USAGE</h2>'
-        + '<p style="font-size:11px;color:#6B7280">Data source breakdown for this snapshot sample &middot; ' + regionLabel + '</p>'
+      '<div class="prov-accent"></div>'
+      + '<div class="prov-hdr-wrap">'
+        + '<div>'
+          + '<p class="prov-title">Provider Usage</p>'
+          + '<p class="prov-sub">Data source breakdown for this snapshot &middot; ' + rlabel + '</p>'
+        + '</div>'
       + '</div>'
-      + '<div class="prov-table-wrap" style="padding:0 0 4px">'
+      + '<div class="prov-table-wrap">'
         + '<table class="prov-table">'
-          + '<thead><tr>'
-            + '<th>Provider</th>'
-            + '<th class="r">VINs</th>'
-            + '<th class="r" style="min-width:140px">Share</th>'
-          + '</tr></thead>'
+          + '<thead><tr><th>Provider</th><th class="r">VINs</th><th class="r" style="min-width:160px">Share of sample</th></tr></thead>'
           + '<tbody>' + rows + '</tbody>'
           + '<tfoot><tr class="prov-total-row">'
-            + '<td>TOTAL</td>'
+            + '<td>Total VINs sampled</td>'
             + '<td class="r">' + fmtNum(grandTotal) + '</td>'
-            + '<td class="r"><div class="prov-bar-cell"><span class="prov-pct-val">100%</span></div></td>'
+            + '<td class="r" style="padding-right:22px"><div class="prov-bar-cell"><span class="prov-pct-val">100%</span></div></td>'
           + '</tr></tfoot>'
         + '</table>'
       + '</div>';
@@ -963,32 +965,37 @@ function providerChartHtml(): string {
     return totals;
   }
 
-  function regionLabel(r) {
+  function rlabel(r) {
     var flags = { UK: '🇬🇧', NZ: '🇳🇿', AU: '🇦🇺', US: '🇺🇸' };
-    return (flags[r] ? flags[r] + ' ' : '') + r;
+    return (flags[r] ? flags[r] + ' ' : '') + r;
+  }
+
+  function insertPanel() {
+    if (document.getElementById('providerPanel')) return;
+    /* The brand table lives inside a .panel div (same one as .tbl-controls).
+       We insert our panel as a sibling of that .panel div, BEFORE it, so
+       it sits between the charts row and the table panel in <main>. */
+    var tblControls = document.querySelector('.tbl-controls');
+    var tablePanelEl = tblControls ? tblControls.closest('.panel') : null;
+    if (!tablePanelEl) tablePanelEl = document.querySelector('#brandTable');
+    if (tablePanelEl && tablePanelEl.parentNode) {
+      var target = tablePanelEl.closest('.panel') || tablePanelEl;
+      target.parentNode.insertBefore(_panel, target);
+    } else {
+      var main = document.querySelector('main') || document.body;
+      main.appendChild(_panel);
+    }
   }
 
   function injectPanel(brands) {
     var totals = computeProviderTotals(brands);
     var hasData = Object.keys(totals).length > 0;
-
-    /* find insertion point — just before the search/filter bar */
-    var container = document.getElementById('tableContainer') || document.querySelector('.brand-table-wrap') || document.body;
-    var tableWrap = document.querySelector('.brand-table-wrap') || document.querySelector('table.brand-table');
-
     if (!hasData) {
       if (_panel && _panel.parentNode) _panel.parentNode.removeChild(_panel);
       return;
     }
-
-    buildPanel(totals, regionLabel(region));
-
-    /* Insert before the table container if not already in DOM */
-    if (!document.getElementById('providerPanel') && tableWrap && tableWrap.parentNode) {
-      tableWrap.parentNode.insertBefore(_panel, tableWrap);
-    } else if (!document.getElementById('providerPanel')) {
-      document.body.insertBefore(_panel, document.body.firstChild);
-    }
+    buildPanel(totals, rlabel(region));
+    insertPanel();
   }
 
   function hookRenderAll() {
@@ -1006,28 +1013,31 @@ function providerChartHtml(): string {
 }
 
 // ── Per-brand provider breakdown in drill row ─────────────────────────────────
+// Injected BEFORE the potential-integrations section so providers appear first.
 function providerDrillHtml(): string {
   return `
 <style>
   .drill-provider-section {
-    margin-top: 14px; padding-top: 14px; border-top: 1px solid #F0F0F5;
+    padding: 12px 0 4px;
   }
   .drill-prov-hdr {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: #6B7280; margin-bottom: 8px;
+    letter-spacing: .07em; color: #10B981; margin-bottom: 8px;
     display: flex; align-items: center; gap: 6px;
   }
   .drill-prov-pills { display: flex; flex-wrap: wrap; gap: 6px; }
   .drill-prov-pill {
-    display: inline-flex; align-items: center; gap: 5px;
-    background: #F8F9FF; border: 1px solid #E8EAFF;
-    border-radius: 20px; padding: 3px 10px 3px 8px;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #F0FDF8; border: 1px solid #A7F3D0;
+    border-radius: 20px; padding: 4px 12px 4px 10px;
     font-size: 11px;
   }
-  .dpp-name { font-weight: 600; color: #1F2937; }
-  .dpp-unknown .dpp-name { color: #9CA3AF; font-style: italic; }
+  .dpp-unknown { background: #F9FAFB; border-color: #E5E7EB; }
+  .dpp-name { font-weight: 700; color: #065F46; }
+  .dpp-unknown .dpp-name { color: #9CA3AF; font-style: italic; font-weight: 400; }
   .dpp-count { font-size: 10px; color: #6B7280; }
-  .dpp-pct   { font-size: 10px; font-weight: 700; color: #3632FF; }
+  .dpp-pct   { font-size: 11px; font-weight: 800; color: #10B981; }
+  .dpp-unknown .dpp-pct { color: #9CA3AF; }
 </style>
 <script>
 (function () {
@@ -1043,9 +1053,9 @@ function providerDrillHtml(): string {
       if (!brandRow) return;
       var nameCell = brandRow.querySelector('.name-cell');
       if (!nameCell) return;
-      var key     = norm(nameCell.textContent);
-      var brands  = DATA[region] || [];
-      var brand   = brands.find(function(b) { return norm(b.make) === key; });
+      var key    = norm(nameCell.textContent);
+      var brands = DATA[region] || [];
+      var brand  = brands.find(function(b) { return norm(b.make) === key; });
       if (!brand || !brand.provider_breakdown) return;
 
       var pb = brand.provider_breakdown;
@@ -1074,14 +1084,20 @@ function providerDrillHtml(): string {
       section.className = 'drill-provider-section';
       section.innerHTML =
         '<div class="drill-prov-hdr">'
-          + '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2.5">'
+          + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5">'
           + '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>'
           + '</svg>'
           + 'Providers'
         + '</div>'
         + '<div class="drill-prov-pills">' + pills + '</div>';
 
-      inner.appendChild(section);
+      /* Insert BEFORE the integrations section so providers always appear first */
+      var integSection = inner.querySelector('.drill-integ-section');
+      if (integSection) {
+        inner.insertBefore(section, integSection);
+      } else {
+        inner.appendChild(section);
+      }
     });
   }
 
