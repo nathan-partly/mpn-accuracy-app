@@ -51,8 +51,8 @@ function CustomTooltip({
   const total = payload.reduce((s, e) => s + (e.value || 0), 0);
   const nonZero = payload.filter((e) => e.value > 0);
   const meta = (payload[0]?.payload?._meta ?? {}) as RoadmapBrandMeta;
-  const brandVins = (payload[0]?.payload?.totalVins as number) ?? 0;
-  const sampleShare = totalSampleVins > 0 ? (brandVins / totalSampleVins) * 100 : null;
+  const brandVins = (payload[0]?.payload?.sampleVins as number) ?? 0;
+  const sampleShare = totalSampleVins > 0 && brandVins > 0 ? (brandVins / totalSampleVins) * 100 : null;
 
   return (
     <div className="bg-white border border-grey-200 rounded-lg shadow-md px-3 py-2.5 text-xs min-w-48 max-w-64">

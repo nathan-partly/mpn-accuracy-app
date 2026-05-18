@@ -25,6 +25,8 @@ export interface RoadmapBrand {
   brand: string;
   today: number;
   totalVins: number;
+  /** VINs for this brand in the coverage CSV sample (used for "% of sample" tooltip) */
+  sampleVins: number;
   /** Integration names that contribute a gain in each quarter (for tooltip display) */
   _meta: RoadmapBrandMeta;
   [quarter: string]: number | string | RoadmapBrandMeta;
@@ -102,7 +104,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   // Uses the most recently uploaded non-baseline snapshot per region — the same data
   // source as the VIN Coverage Dashboard brand table, so numbers are always consistent.
   // marketCount: how many of the four markets a brand actually has snapshot rows in.
-  const brandCoverage: Record<string, { today: number; totalVins: number; marketCount: number }> = {};
+  const brandCoverage: Record<string, { today: number; totalVins: number; sampleVins: number; marketCount: number }> = {};
   try {
     if (market === "all") {
       // Latest non-baseline snapshot per region, then aggregate across all regions
@@ -131,7 +133,7 @@ export async function GET(req: Request): Promise<NextResponse> {
           const covered     = typeof row.covered     === "string" ? parseInt(row.covered,     10) : (row.covered     ?? 0);
           const marketCount = typeof row.market_count === "string" ? parseInt(row.market_count, 10) : (row.market_count ?? 1);
           const pct = total > 0 ? (covered / total) * 100 : 0;
-          brandCoverage[row.brand] = { today: pct, totalVins: total, marketCount };
+          brandCoverage[row.brand] = { today: pct, totalVins: total, sampleVins: total, marketCount };
         }
       }
     } else {
@@ -156,7 +158,7 @@ export async function GET(req: Request): Promise<NextResponse> {
           const total   = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
           const covered = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
           const pct = total > 0 ? (covered / total) * 100 : 0;
-          brandCoverage[row.brand] = { today: pct, totalVins: total, marketCount: 1 };
+          brandCoverage[row.brand] = { today: pct, totalVins: total, sampleVins: total, marketCount: 1 };
         }
       }
     }
@@ -324,7 +326,7 @@ export async function GET(req: Request): Promise<NextResponse> {
           if (!missingBrands.has(row.brand)) continue;
           const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
           const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
-          if (t > 0) brandCoverage[row.brand] = { today: (c / t) * 100, totalVins: t, marketCount: 1 };
+          if (t > 0) brandCoverage[row.brand] = { today: (c / t) * 100, totalVins: t, sampleVins: 0, marketCount: 1 };
         }
       }
     }
@@ -422,13 +424,14 @@ export async function GET(req: Request): Promise<NextResponse> {
   const rows: RoadmapBrand[] = [];
 
   for (const brand of Object.keys(integrationBrands)) {
-    const cov = brandCoverage[brand] ?? { today: 0, totalVins: 0 };
+    const cov = brandCoverage[brand] ?? { today: 0, totalVins: 0, sampleVins: 0 };
     const gains = brandQuarterGains[brand] ?? {};
 
     const row: RoadmapBrand = {
       brand,
       today: parseFloat(cov.today.toFixed(2)),
       totalVins: cov.totalVins,
+      sampleVins: cov.sampleVins,
       _meta: brandQuarterIntegrations[brand] ?? {},
     };
 
