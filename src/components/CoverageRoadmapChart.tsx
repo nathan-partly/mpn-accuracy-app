@@ -66,6 +66,10 @@ function CustomTooltip({
       </div>
       {nonZero.map((entry) => {
         const integrations = entry.name !== "today" ? (meta[entry.name] ?? []) : [];
+        const isGain = entry.name !== "today";
+        const sampleEquivalent = isGain && sampleShare !== null
+          ? (entry.value * sampleShare) / 100
+          : null;
         return (
           <div key={entry.name} className="mb-1.5">
             <div className="flex items-center justify-between gap-4">
@@ -80,6 +84,11 @@ function CustomTooltip({
               </span>
               <span className="font-semibold text-grey-900 tabular-nums">{entry.value.toFixed(1)}%</span>
             </div>
+            {sampleEquivalent !== null && (
+              <p className="text-grey-400 ml-3.5 mt-0.5 leading-tight tabular-nums">
+                = {sampleEquivalent.toFixed(2)}% of total sample
+              </p>
+            )}
             {integrations.length > 0 && (
               <p className="text-grey-400 ml-3.5 mt-0.5 leading-tight">
                 {integrations.join(", ")}
