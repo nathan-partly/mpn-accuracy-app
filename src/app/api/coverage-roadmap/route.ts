@@ -36,6 +36,8 @@ export interface RoadmapResponse {
   market: Market;
   /** Present when at least one undated integration contributes gains; always "TBD" if set */
   undatedKey: string | null;
+  /** Total VINs across all brands in the result (used to calculate each brand's share of the sample) */
+  totalSampleVins: number;
 }
 
 /** Stored value per market: new format with type discriminant, or legacy plain number */
@@ -515,8 +517,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     }, { headers: { "Cache-Control": "no-store" } });
   }
 
+  const totalSampleVins = topRows.reduce((s, r) => s + (r.totalVins as number), 0);
+
   return NextResponse.json(
-    { data: topRows, quarters, market, undatedKey: quartersFound["TBD"] ? "TBD" : null } satisfies RoadmapResponse,
+    { data: topRows, quarters, market, undatedKey: quartersFound["TBD"] ? "TBD" : null, totalSampleVins } satisfies RoadmapResponse,
     { headers: { "Cache-Control": "no-store" } }
   );
 }

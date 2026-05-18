@@ -39,21 +39,31 @@ const MARKETS: { key: Market; label: string }[] = [
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
 function CustomTooltip({
-  active, payload, label,
+  active, payload, label, totalSampleVins,
 }: {
   active?: boolean;
   payload?: Array<{ name: string; value: number; color: string; payload: RoadmapBrand }>;
   label?: string;
+  totalSampleVins: number;
 }) {
   if (!active || !payload || payload.length === 0) return null;
 
   const total = payload.reduce((s, e) => s + (e.value || 0), 0);
   const nonZero = payload.filter((e) => e.value > 0);
   const meta = (payload[0]?.payload?._meta ?? {}) as RoadmapBrandMeta;
+  const brandVins = (payload[0]?.payload?.totalVins as number) ?? 0;
+  const sampleShare = totalSampleVins > 0 ? (brandVins / totalSampleVins) * 100 : null;
 
   return (
     <div className="bg-white border border-grey-200 rounded-lg shadow-md px-3 py-2.5 text-xs min-w-48 max-w-64">
-      <p className="font-bold text-grey-950 mb-2">{label}</p>
+      <div className="flex items-baseline justify-between gap-3 mb-2">
+        <p className="font-bold text-grey-950">{label}</p>
+        {sampleShare !== null && (
+          <span className="text-grey-400 tabular-nums whitespace-nowrap">
+            {sampleShare.toFixed(1)}% of sample
+          </span>
+        )}
+      </div>
       {nonZero.map((entry) => {
         const integrations = entry.name !== "today" ? (meta[entry.name] ?? []) : [];
         return (
@@ -138,6 +148,7 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
   const data: RoadmapBrand[] = roadmap?.data ?? [];
   const quarters: string[] = roadmap?.quarters ?? [];
   const undatedKey: string | null = roadmap?.undatedKey ?? null;
+  const totalSampleVins: number = roadmap?.totalSampleVins ?? 0;
 
   return (
     <div>
@@ -206,7 +217,7 @@ export function CoverageRoadmapChart({ refreshKey = 0 }: Props) {
                 width={40}
                 ticks={[0, 25, 50, 75, 100]}
               />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(54,50,255,0.04)" }} />
+              <Tooltip content={(props) => <CustomTooltip {...props} totalSampleVins={totalSampleVins} />} cursor={{ fill: "rgba(54,50,255,0.04)" }} />
 
               <Bar
                 dataKey="today"
