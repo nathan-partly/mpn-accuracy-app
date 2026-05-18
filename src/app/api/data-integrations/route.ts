@@ -117,48 +117,87 @@ export async function GET() {
       return { ...rest, brand_incremental } as unknown as DataIntegration;
     });
 
-    // ── 2. Fetch brand totals from latest non-baseline snapshot per region ───────
-    // Two simple queries instead of one complex CTE to avoid Neon HTTP driver issues.
-    // Shares are computed in TypeScript after fetching raw totals.
-    const brandShareMap    = new Map<string, number>(); // brand → share of total VIN universe (%)
-    const brandCoverageMap = new Map<string, number>(); // brand → current coverage rate (%)
+    // ── 2. Fetch brand totals — global (for total_vio_pct) AND per-market (for per-market incremental) ──
+    // Per-market shares are essential for accurate market incrementals: a brand like Vauxhall is 3% of the
+    // UK sample but only ~1% of the combined global sample, so using global shares understates UK impact.
+
+    type BrandMap = Map<string, number>;
+    // Global maps (all regions combined) — used for total_vio_pct and global incremental
+    const brandShareMap    = new Map<string, number>();
+    const brandCoverageMap = new Map<string, number>();
+    // Per-market maps — used for per-market incremental calculations
+    const mktShareMap:    Record<"nz"|"uk"|"au"|"us", BrandMap> = { nz: new Map(), uk: new Map(), au: new Map(), us: new Map() };
+    const mktCoverageMap: Record<"nz"|"uk"|"au"|"us", BrandMap> = { nz: new Map(), uk: new Map(), au: new Map(), us: new Map() };
+
+    const regionToMarket: Record<string, "nz"|"uk"|"au"|"us"> = { NZ: "nz", UK: "uk", AU: "au", US: "us" };
+
     try {
-      // Step A: get the latest non-baseline snapshot id per region
+      // Step A: get the latest non-baseline snapshot id AND region per region
       const latestSnaps = await sql`
-        SELECT DISTINCT ON (region) id
+        SELECT DISTINCT ON (region) id, region
         FROM coverage_sample_snapshots
         WHERE is_baseline = false
         ORDER BY region, snapshot_date DESC, created_at DESC
-      ` as Array<{ id: number }>;
+      ` as Array<{ id: number; region: string }>;
 
       if (latestSnaps.length > 0) {
         const snapIds = latestSnaps.map((s) => s.id);
 
-        // Step B: sum brand totals + covered (y) across those snapshot ids
-        const brandRows = await sql`
-          SELECT UPPER(make) AS make, SUM(total)::int AS total, SUM(y)::int AS covered
-          FROM coverage_sample_rows
-          WHERE snapshot_id = ANY(${snapIds})
-          GROUP BY UPPER(make)
-        ` as Array<{ make: string; total: number; covered: number }>;
+        // Step B: per-region brand rows (to build per-market share maps)
+        const perRegionRows = await sql`
+          SELECT
+            csr.snapshot_id,
+            css.region,
+            UPPER(csr.make) AS make,
+            csr.total::int  AS total,
+            csr.y::int      AS covered
+          FROM coverage_sample_rows csr
+          JOIN coverage_sample_snapshots css ON css.id = csr.snapshot_id
+          WHERE csr.snapshot_id = ANY(${snapIds})
+        ` as Array<{ snapshot_id: number; region: string; make: string; total: number; covered: number }>;
 
-        // Compute shares + per-brand coverage rates in TypeScript
-        const grandTotal = brandRows.reduce((s, r) => {
-          const t = typeof r.total === "string" ? parseInt(r.total, 10) : (r.total ?? 0);
-          return s + t;
-        }, 0);
+        // Build per-market maps
+        const mktRawTotals: Record<string, Record<string, { t: number; c: number }>> = {};
+        for (const row of perRegionRows) {
+          const mkt = regionToMarket[row.region.toUpperCase()];
+          if (!mkt) continue;
+          const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+          const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+          if (!mktRawTotals[mkt]) mktRawTotals[mkt] = {};
+          const prev = mktRawTotals[mkt][row.make] ?? { t: 0, c: 0 };
+          mktRawTotals[mkt][row.make] = { t: prev.t + t, c: prev.c + c };
+        }
+        for (const [mkt, brands] of Object.entries(mktRawTotals)) {
+          const m = mkt as "nz"|"uk"|"au"|"us";
+          const mktTotal = Object.values(brands).reduce((s, v) => s + v.t, 0);
+          if (mktTotal <= 0) continue;
+          for (const [brand, { t, c }] of Object.entries(brands)) {
+            const share   = parseFloat(((t / mktTotal) * 100).toFixed(2));
+            const covRate = t > 0 ? parseFloat(((c / t) * 100).toFixed(2)) : 0;
+            mktShareMap[m].set(brand, share);
+            mktShareMap[m].set(normBrand(brand), share);
+            mktCoverageMap[m].set(brand, covRate);
+            mktCoverageMap[m].set(normBrand(brand), covRate);
+          }
+        }
 
+        // Build global maps (sum across all regions)
+        const globalRaw: Record<string, { t: number; c: number }> = {};
+        for (const row of perRegionRows) {
+          const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
+          const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+          const prev = globalRaw[row.make] ?? { t: 0, c: 0 };
+          globalRaw[row.make] = { t: prev.t + t, c: prev.c + c };
+        }
+        const grandTotal = Object.values(globalRaw).reduce((s, v) => s + v.t, 0);
         if (grandTotal > 0) {
-          for (const row of brandRows) {
-            const t = typeof row.total   === "string" ? parseInt(row.total,   10) : (row.total   ?? 0);
-            const c = typeof row.covered === "string" ? parseInt(row.covered, 10) : (row.covered ?? 0);
+          for (const [brand, { t, c }] of Object.entries(globalRaw)) {
             const share   = parseFloat(((t / grandTotal) * 100).toFixed(2));
             const covRate = t > 0 ? parseFloat(((c / t) * 100).toFixed(2)) : 0;
-            // Store under raw uppercase AND normalised key for fuzzy matching
-            brandShareMap.set(row.make, share);
-            brandShareMap.set(normBrand(row.make), share);
-            brandCoverageMap.set(row.make, covRate);
-            brandCoverageMap.set(normBrand(row.make), covRate);
+            brandShareMap.set(brand, share);
+            brandShareMap.set(normBrand(brand), share);
+            brandCoverageMap.set(brand, covRate);
+            brandCoverageMap.set(normBrand(brand), covRate);
           }
         }
       }
@@ -166,61 +205,57 @@ export async function GET() {
       console.error("[data-integrations] brand share query failed:", e);
     }
 
-    // Helpers: look up a brand in each map, trying both raw-uppercase and normalised keys
+    // Helpers
     const getShare = (brand: string): number =>
-      brandShareMap.get(brand.toUpperCase()) ??
-      brandShareMap.get(normBrand(brand)) ??
-      0;
+      brandShareMap.get(brand.toUpperCase()) ?? brandShareMap.get(normBrand(brand)) ?? 0;
     const getCoverage = (brand: string): number =>
-      brandCoverageMap.get(brand.toUpperCase()) ??
-      brandCoverageMap.get(normBrand(brand)) ??
-      0;
+      brandCoverageMap.get(brand.toUpperCase()) ?? brandCoverageMap.get(normBrand(brand)) ?? 0;
+    const getMktShare = (m: "nz"|"uk"|"au"|"us", brand: string): number =>
+      mktShareMap[m].get(brand.toUpperCase()) ?? mktShareMap[m].get(normBrand(brand)) ?? 0;
+    const getMktCoverage = (m: "nz"|"uk"|"au"|"us", brand: string): number =>
+      mktCoverageMap[m].get(brand.toUpperCase()) ?? mktCoverageMap[m].get(normBrand(brand)) ?? getCoverage(brand);
 
     // ── 3. Enrich each integration with computed values ────────────────────────
-    // Always compute regardless of whether a manual value exists — the UI decides
-    // which one to display. This lets rows with stale/wrong manual values still
-    // show the auto-estimate in the tooltip or as a fallback.
     for (const integ of integrations) {
       const brands = (integ.brands ?? []);
 
       // computed_total_vio_pct: sum of brand shares from sample data
-      if (brands.length > 0 && brandShareMap.size > 0) {
-        const total = brands.reduce((s, b) => s + getShare(b), 0);
-        integ.computed_total_vio_pct = total > 0 ? parseFloat(total.toFixed(2)) : null;
-      } else {
-        integ.computed_total_vio_pct = null;
-      }
+      integ.computed_total_vio_pct = brands.length > 0 && brandShareMap.size > 0
+        ? (parseFloat(brands.reduce((s, b) => s + getShare(b), 0).toFixed(2)) || null)
+        : null;
 
-      // computed_incremental_vio_pct: Σ(brand_share × avg_market_gain%)
-      // Handles both fixed gains and target-coverage gains (target − current coverage).
-      // Also computes per-market breakdown (nz/uk/au/us).
+      // computed_incremental_*: Σ(market-specific brand_share × brand_gain%)
+      // Per-market values use per-market brand shares so e.g. Vauxhall appears as
+      // 3% of the UK sample (not ~1% of the combined global sample).
       if (integ.brand_incremental && brandShareMap.size > 0) {
-        // Global (average across markets)
         let weightedGainSum = 0;
         let anyGain = false;
-        // Per-market accumulators
         const mktSum: Record<"nz"|"uk"|"au"|"us", number> = { nz: 0, uk: 0, au: 0, us: 0 };
         const mktAny: Record<"nz"|"uk"|"au"|"us", boolean> = { nz: false, uk: false, au: false, us: false };
 
         for (const [brand, markets] of Object.entries(integ.brand_incremental)) {
-          const share      = getShare(brand) / 100; // fraction of total VIN universe
-          if (share <= 0) continue;
-          const currentCov = getCoverage(brand); // current coverage rate for this brand (%)
+          const currentCov = getCoverage(brand);
 
-          // Per-market gains
+          // Per-market: use market-specific brand share as weight
           for (const m of (["nz", "uk", "au", "us"] as const)) {
-            const g = resolveMarketGain(markets[m], currentCov);
-            if (g != null) { mktSum[m] += share * g; mktAny[m] = true; }
+            const g = resolveMarketGain(markets[m], getMktCoverage(m, brand));
+            if (g != null) {
+              const share = getMktShare(m, brand) / 100;
+              if (share > 0) { mktSum[m] += share * g; mktAny[m] = true; }
+            }
           }
 
-          // Global average (only over markets where this brand has a value)
-          const gains = (["nz", "uk", "au", "us"] as const)
-            .map((m) => resolveMarketGain(markets[m], currentCov))
-            .filter((v): v is number => v != null);
-          if (gains.length === 0) continue;
-          const avgGain = gains.reduce((s, v) => s + v, 0) / gains.length;
-          weightedGainSum += share * avgGain;
-          anyGain = true;
+          // Global: use global brand share, average gain across markets with data
+          const globalShare = getShare(brand) / 100;
+          if (globalShare > 0) {
+            const gains = (["nz", "uk", "au", "us"] as const)
+              .map((m) => resolveMarketGain(markets[m], currentCov))
+              .filter((v): v is number => v != null);
+            if (gains.length > 0) {
+              weightedGainSum += globalShare * (gains.reduce((s, v) => s + v, 0) / gains.length);
+              anyGain = true;
+            }
+          }
         }
 
         integ.computed_incremental_vio_pct = anyGain ? parseFloat(weightedGainSum.toFixed(2)) : null;
