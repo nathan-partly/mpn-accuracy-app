@@ -165,6 +165,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     // Falls through to empty brandCoverage — gains still show, today = 0%
   }
 
+  // Capture total sample VINs now, before step 1b overwrites totalVins with VIN snapshot
+  // counts. This ensures "% of sample" in the tooltip matches the coverage dashboard.
+  const totalSampleVins = Object.values(brandCoverage).reduce((s, v) => s + v.totalVins, 0);
+
   // ── 1b. Override totalVins with VIN snapshot counts for accurate brand ordering ──
   // The weekly CSV samples are small (~50 VINs/brand) and skew by sample composition,
   // making brand ordering unreliable. The VIN snapshot has thousands of VINs per brand
@@ -516,10 +520,6 @@ export async function GET(req: Request): Promise<NextResponse> {
       integrationBrandsCount: Object.keys(integrationBrands).length,
     }, { headers: { "Cache-Control": "no-store" } });
   }
-
-  // Sum ALL brands in the snapshot (not just the integration brands shown in the chart)
-  // so that each brand's share reflects its true proportion of the full sample.
-  const totalSampleVins = Object.values(brandCoverage).reduce((s, v) => s + v.totalVins, 0);
 
   return NextResponse.json(
     { data: topRows, quarters, market, undatedKey: quartersFound["TBD"] ? "TBD" : null, totalSampleVins } satisfies RoadmapResponse,
