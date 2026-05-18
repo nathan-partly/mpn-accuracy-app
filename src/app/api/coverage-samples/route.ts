@@ -66,7 +66,7 @@ function parseCsvToRegionRows(csv: string): Record<string, CoverageSampleRow[]> 
     const region   = cols[iRegion]?.trim();
     const status   = cols[iStatus]?.trim().toLowerCase();
     const vin      = iVin >= 0 ? cols[iVin]?.trim() : undefined;
-    const provider = iProvider >= 0 ? (cols[iProvider]?.trim() || "(unknown)") : undefined;
+    const provider = iProvider >= 0 ? (cols[iProvider]?.trim() || "No data") : undefined;
     if (!make || !region || make === "null") continue;
     if (!acc[region]) acc[region] = {};
     if (!acc[region][make]) acc[region][make] = { y: 0, n: 0, yv: [], nv: [], providers: {} };

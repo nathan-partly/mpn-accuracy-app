@@ -909,8 +909,8 @@ function providerChartHtml(): string {
 
     var entries = Object.keys(totals).map(function(p) { return { name: p, count: totals[p] }; });
     entries.sort(function(a, b) {
-      var aU = a.name.toLowerCase().indexOf('unknown') !== -1;
-      var bU = b.name.toLowerCase().indexOf('unknown') !== -1;
+      var aU = a.name.toLowerCase() === 'no data';
+      var bU = b.name.toLowerCase() === 'no data';
       if (aU && !bU) return 1;
       if (!aU && bU) return -1;
       return b.count - a.count;
@@ -922,7 +922,7 @@ function providerChartHtml(): string {
 
     var rows = entries.map(function(e) {
       var pct = grandTotal > 0 ? (e.count / grandTotal * 100) : 0;
-      var isU = e.name.toLowerCase().indexOf('unknown') !== -1;
+      var isU = e.name.toLowerCase() === 'no data';
       return '<tr>'
         + '<td' + (isU ? ' class="prov-unknown"' : '') + '>' + e.name + '</td>'
         + '<td class="r"><span class="prov-count-val">' + fmtNum(e.count) + '</span></td>'
@@ -1061,8 +1061,8 @@ function providerDrillHtml(): string {
       var pb = brand.provider_breakdown;
       var entries = Object.keys(pb).map(function(p) { return { name: p, count: pb[p] }; });
       entries.sort(function(a, b) {
-        var aU = a.name.toLowerCase().indexOf('unknown') !== -1;
-        var bU = b.name.toLowerCase().indexOf('unknown') !== -1;
+        var aU = a.name.toLowerCase() === 'no data';
+        var bU = b.name.toLowerCase() === 'no data';
         if (aU && !bU) return 1;
         if (!aU && bU) return -1;
         return b.count - a.count;
@@ -1072,7 +1072,7 @@ function providerDrillHtml(): string {
 
       var pills = entries.map(function(e) {
         var pct = total > 0 ? (e.count / total * 100).toFixed(0) : 0;
-        var isU = e.name.toLowerCase().indexOf('unknown') !== -1;
+        var isU = e.name.toLowerCase() === 'no data';
         return '<span class="drill-prov-pill' + (isU ? ' dpp-unknown' : '') + '">'
           + '<span class="dpp-name">' + e.name + '</span>'
           + '<span class="dpp-count">' + e.count + '</span>'
