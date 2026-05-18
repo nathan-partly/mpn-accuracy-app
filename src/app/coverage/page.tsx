@@ -59,7 +59,7 @@ export default function CoveragePage() {
   const iframeRef      = useRef<HTMLIFrameElement>(null);
   const iframeReady    = useRef(false);      // true after first onLoad
   const isFirstRender  = useRef(true);       // skip postMessage on initial mount
-  const dataCache      = useRef(new Map<string, Record<string, unknown[]>>());
+  const dataCache      = useRef(new Map<string, { data: Record<string, unknown[]>; ts: number }>());
 
   // ── Fetch data and postMessage it to the iframe ───────────────────────────────
   // Uses a request counter to discard stale responses — prevents the "All" data
@@ -71,7 +71,9 @@ export default function CoveragePage() {
     const cacheKey = typeof sel === "number" ? `snap:${sel}` : "combined";
     const isCombined = sel === "ALL";
 
-    let data = dataCache.current.get(cacheKey);
+    const CACHE_TTL_MS = 60_000; // 60 seconds
+    const cached = dataCache.current.get(cacheKey);
+    let data = cached && (Date.now() - cached.ts < CACHE_TTL_MS) ? cached.data : undefined;
     if (!data) {
       const params = new URLSearchParams();
       if (typeof sel === "number") params.set("snapshot", String(sel));
@@ -79,7 +81,7 @@ export default function CoveragePage() {
         const res = await fetch(`/api/coverage-data?${params.toString()}`);
         if (!res.ok) return;
         data = await res.json() as Record<string, unknown[]>;
-        dataCache.current.set(cacheKey, data);
+        dataCache.current.set(cacheKey, { data, ts: Date.now() });
       } catch { return; }
     }
 
