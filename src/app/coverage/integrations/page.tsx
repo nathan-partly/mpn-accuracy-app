@@ -372,8 +372,7 @@ export default function DataIntegrationsPage() {
     }
     const payload = {
       ...form,
-      // Clear legacy global/market VIO fields — coverage is now all per-brand per-market
-      total_vio_pct: null,
+      // Keep total_vio_pct from form (user override); clear derived legacy fields
       incremental_vio_pct: null,
       incremental_nz_pct: null,
       incremental_uk_pct: null,
@@ -466,7 +465,7 @@ export default function DataIntegrationsPage() {
             </div>
 
             {[
-              { label: "Offline VIO Scope",  value: `${offlineTotalVio.toFixed(1)}%`,   sub: "brands in live offline integrations",       color: "text-grey-950" },
+              { label: "Offline VIO Scope",  value: `${offlineTotalVio.toFixed(1)}%`,   sub: "sum of Total VIO % for live offline integrations", color: "text-grey-950" },
               { label: "Projected Offline", value: `${projectedOffline.toFixed(1)}%`,  sub: "brands in all planned offline integrations", color: "text-emerald-600" },
               { label: "Projected Total",   value: `${projectedTotal.toFixed(1)}%`,    sub: `live ${liveRate.toFixed(1)}% + future gains`, color: "text-brand-blue" },
             ].map((kpi) => (
@@ -540,8 +539,8 @@ export default function DataIntegrationsPage() {
                 <input type="text" value={brandsInput} onChange={(e) => setBrandsInput(e.target.value)} placeholder="e.g. TOYOTA, LEXUS, DAIHATSU" className="w-full px-3 py-2 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue" />
               </div>
 
-              {/* Row 4: Data Availability + Cost */}
-              <div className="col-span-2 grid grid-cols-3 gap-4">
+              {/* Row 4: Data Availability + Total VIO % + Cost */}
+              <div className="col-span-2 grid grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Data Availability</label>
                   <select
@@ -553,6 +552,25 @@ export default function DataIntegrationsPage() {
                       <option key={String(o.value)} value={o.value ?? ""}>{o.label}</option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">
+                    Total VIO %
+                    <span className="ml-1 normal-case font-normal text-grey-400">— override</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number" min={0} max={100} step={0.1}
+                      value={form.total_vio_pct ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, total_vio_pct: e.target.value === "" ? null : parseFloat(e.target.value) }))}
+                      placeholder="auto"
+                      className="w-full px-3 py-2 pr-7 border border-grey-200 rounded-lg text-sm text-grey-950 focus:outline-none focus:border-brand-blue tabular-nums"
+                    />
+                    {form.total_vio_pct != null && (
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-grey-400 pointer-events-none">%</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-grey-400 mt-0.5">% of all VINs in this integration&apos;s brands</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-grey-500 uppercase tracking-wider mb-1">Annual Cost (USD)</label>
