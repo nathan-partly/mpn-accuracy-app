@@ -64,10 +64,11 @@ export default async function QualityPage() {
   const vioSum = (group: typeof brands) =>
     group.reduce((sum, b) => sum + (b.vio_combined_pct != null ? Number(b.vio_combined_pct) / 4 : 0), 0);
 
-  const l3Vio = vioSum(l3);
-  const l2Vio = vioSum(l2);
-  const l1Vio = vioSum(l1);
-  const l0Vio = vioSum(l0);
+  // Cumulative: each level represents brands at *at least* that quality level
+  const l3Vio         = vioSum(l3);
+  const l2Vio         = vioSum([...l3, ...l2]);
+  const l1Vio         = vioSum([...l3, ...l2, ...l1]);
+  const l0Vio         = vioSum(l0);
   const unsupportedVio = vioSum(unsupported);
 
   return (
@@ -96,8 +97,8 @@ export default async function QualityPage() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
         <KpiCard label="Level 3 Brands" value={l3.length} sub={`Representing ${l3Vio.toFixed(1)}% of global VIO`} highlight />
-        <KpiCard label="Level 2 Brands" value={l2.length} sub={`Representing ${l2Vio.toFixed(1)}% of global VIO`} />
-        <KpiCard label="Level 1 Brands" value={l1.length} sub={`Representing ${l1Vio.toFixed(1)}% of global VIO`} />
+        <KpiCard label="Level 2 Brands" value={l2.length} sub={`${l2Vio.toFixed(1)}% of global VIO at ≥L2`} />
+        <KpiCard label="Level 1 Brands" value={l1.length} sub={`${l1Vio.toFixed(1)}% of global VIO at ≥L1`} />
         <KpiCard label="Level 0 Brands" value={l0.length} sub={`Representing ${l0Vio.toFixed(1)}% of global VIO`} />
         <KpiCard label="Unsupported" value={unsupported.length} sub={`Representing ${unsupportedVio.toFixed(1)}% of global VIO`} />
       </div>
